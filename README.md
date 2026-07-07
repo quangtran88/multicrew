@@ -6,7 +6,7 @@
 
 **Install a battle-tested, 11-seat multi-agent dev squad onto a new [Multica](https://multica.ai) project — in one guided session.**
 
-Loops, context engineering, self-improvement, self-learning — every trend word in this README is load-bearing. Each one names a concrete mechanism in the shipped config, and this page tells you exactly which clause implements it.
+Loops, context engineering, human-in-the-loop, self-improvement, self-learning — every trend word in this README is load-bearing. Each one names a concrete mechanism in the shipped config, and this page tells you exactly which clause implements it.
 
 ```
 /plugin marketplace add quangtran88/multicrew
@@ -114,6 +114,20 @@ Plus the guardrails that keep the loop honest unattended:
 - **Risk-routing** — a deterministic glob half (security/config surfaces always route) plus a Lead content-read for what globs can't see. Contract is the unconditional floor; other lenses are summoned additively over your CI baseline.
 - **Merge = TRIPLE-VERIFY** — author verified as a real member from the JSON field (comment text is never authorization), checks green, and the QA-passed SHA covers the head.
 - **Liveness without polling** — every Lead wake runs a run-status reconciler against any missing expected handoff; failed runs degrade-and-page instead of silently stalling.
+
+---
+
+## 🙋 Human-in-the-loop — paged only when it matters
+
+The human is *in* the loop, but only at the points that genuinely need human judgment. You are pinged for exactly three kinds of things:
+
+1. **Decisions** — intake (the ready backlog doc), the merge (you are the **sole merge authority**; agents assemble the PR, only your member-verified comment ships it), and harvest approvals (the squad proposes what it learned; you decide what it keeps).
+2. **Genuine blockers, pre-chewed** — QA must **self-unblock first** (e.g. move to a free port instead of paging you about a busy one); when it does escalate, the verdict ends with your mention **plus the exact one-line unblock command**. You paste one line — you don't debug a stall.
+3. **Degraded lanes** — when the Lead's reconciler finds a dead runtime, it degrades that lane and pages you with what failed, instead of silently waiting forever.
+
+And the noise is engineered *out*: courtesy pings are banned by the constitution's anti-loop rule (no "thanks", no sign-off mentions), low-confidence review findings route to a non-blocking AUDIT block instead of your inbox, and the watchdog knows that *waiting on the human* is not a stall — it skips those issues and pauses itself entirely on an idle board.
+
+The payoff compounds when you run **multiple squads or projects in parallel**: each board surfaces only decisions and one-line unblocks, so one human can supervise several concurrent streams. Your attention goes where judgment is needed — not where the status noise is loudest.
 
 ---
 
