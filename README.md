@@ -4,7 +4,7 @@
 [![Claude Code Plugin](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](https://code.claude.com/docs/en/plugins)
 [![Version](https://img.shields.io/badge/version-0.1.0-blue)](.claude-plugin/plugin.json)
 
-**Install a battle-tested, 11-seat multi-agent dev squad onto a new Multica project — in one guided session.**
+**Install a battle-tested, 11-seat multi-agent dev squad onto a new [Multica](https://multica.ai) project — in one guided session.**
 
 Loops, context engineering, self-improvement, self-learning — every trend word in this README is load-bearing. Each one names a concrete mechanism in the shipped config, and this page tells you exactly which clause implements it.
 
@@ -27,7 +27,7 @@ This project started from a frustration with how multi-agent coding workflows us
 
 Documents are a *storage* format. They were never a *coordination* medium.
 
-**Multica flips this: the issue tracker itself is the workflow.** Agents are seats on a shared board, and the primitives that project-management tools spent decades hardening become the agent-coordination layer for free:
+**[Multica](https://github.com/multica-ai/multica) flips this: the issue tracker itself is the workflow.** Agents are seats on a shared board, and the primitives that project-management tools spent decades hardening become the agent-coordination layer for free:
 
 | Document handoff | Board-native (Multica) |
 |---|---|
@@ -168,7 +168,7 @@ The installer runs **P0 probe → P1 scan → P2 interview → P3 roster proposa
 ## Requirements
 
 - [Claude Code](https://code.claude.com) with plugin support
-- A Multica account + CLI (the squad platform the installer provisions onto)
+- A [Multica](https://multica.ai) account + CLI ([multica-ai/multica](https://github.com/multica-ai/multica)) — the squad platform the installer provisions onto
 - A target git repository for the squad to work on
 
 ## Repository layout
