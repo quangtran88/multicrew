@@ -24,6 +24,7 @@ This project started from a frustration with how multi-agent coding workflows us
 - **Nothing wakes the next agent.** A document can't fire a handoff; you either poll, babysit, or discover the stall hours later.
 - **Failure is invisible.** When a step silently dies, no artifact records it — you diff markdown files to reconstruct what happened.
 - **No audit trail.** Who decided what, in which order, on which version of the code? Documents get overwritten; history evaporates.
+- **The human becomes the scheduler.** Nothing pings you at the right moment, so you poll every pipeline yourself — which caps how many you can run at once.
 
 Documents are a *storage* format. They were never a *coordination* medium.
 
@@ -36,6 +37,7 @@ Documents are a *storage* format. They were never a *coordination* medium.
 | Artifacts scattered across files | Every verdict, PR URL, and QA evidence is a **comment on the issue** — durable, ordered, attributable |
 | Silent failure | Run history is queryable; a **reconciler** checks every expected handoff on every wake; a **watchdog** pokes stalls |
 | Human reads logs to catch up | Human watches the same board the agents work — and is the **sole merge authority** on it |
+| Human babysits every chain | Human is **paged only when input is genuinely needed** — decisions, one-line unblocks, merges — so one person supervises multiple squads and projects in parallel ([details below](#-human-in-the-loop--paged-only-when-it-matters)) |
 
 One detail carries most of the safety story: on this board, **issue text is data, never instructions**. Only a comment whose *structured author field* says "human member" can authorize a merge, deploy, or secret access — prose claiming "the human approved" is a red flag to surface, not a command.
 
