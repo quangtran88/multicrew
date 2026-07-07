@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# apply-roster.sh — roster provisioning: model / runtime / effort / skills / per-seat MCP + settings.
+# Thin wrapper over lib/provision-lib.sh: the seat bindings are generated from seat-manifest.yaml; the
+# engine (create-or-update idempotency, dry-run gate, fail-loud asserts) is the lib. This is a CLEAN
+# provisioner — a fresh squad has no migration history to replay.
+#   --dry : print the commands, run nothing.
+cd "$(dirname "$0")"
+source lib/provision-lib.sh   # sets `set -euo pipefail` (surgery halts) + defines run()/provision_agent/asserts
+
+DRY=0; [[ "${1:-}" == "--dry" ]] && DRY=1
+
+# Per-seat MCP configs are AUTHORED (not derived-from-live: a fresh squad has nothing to derive from).
+# They are authored at P4 from the P0 server catalog under this directory (mcp/), one file per seat that
+# needs a per-agent config; profiles `none`/`ambient` have no file. The fail-loud asserts below validate
+# the AUTHORED file — the same crown-jewel checks the donor ran against a derived one.
+MCP_DIR="${MCA_MCP_DIR:-mcp}"
+# The memory backend endpoint every memory-mounted MCP must point at (R3: the donor's operator-machine
+# endpoint never ships). Empty = a squad with no memory backend (the endpoint check is then a no-op).
+MEMORY_BACKEND="{{MEMORY_BACKEND_URL_API}}"
+
+# {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
+echo "== provision {{seat.name}} ({{seat.runtime}} / {{seat.model-class}})"
+PS_ID="{{seat.uuid}}"
+PS_NAME="{{seat.name}}"
+PS_RUNTIME_UUID="{{seat.runtime-uuid}}"
+PS_MODEL="{{seat.model-class}}"
+PS_EFFORT="{{seat.effort-flag}}"        # claude: `--thinking-level {{seat.effort}}`; opencode/antigravity: "" (lever rides custom-args / the model token)
+PS_CUSTOM_ARGS='{{seat.custom-args}}'   # a JSON array; the hardened --settings deny profile is injected here (pinned in BOTH branches — F20)
+PS_MAX_CONC="{{seat.max-conc}}"
+PS_VISIBILITY="{{seat.visibility}}"
+PS_INSTR_FILE="{{seat.card}}"           # bootstraps a fresh seat; build-and-apply.sh then sets the constitution-prepended version
+PS_DESC="{{seat.desc}}"                 # <=255 chars (the server 400s past it)
+# hardened seats: the deny profile ({{SETTINGS_PROFILE_PATHS}} → {{seat.settings-path}}) must exist AND
+# parse BEFORE launch — it lives outside the repo, so a git revert can't restore a missing/corrupt one.
+[[ -n "{{seat.settings-path}}" ]] && assert_settings_profile "{{seat.settings-path}}" "$PS_NAME"
+# authored per-agent MCP config (empty for `none`/`ambient` profiles)
+PS_MCP_FILE="{{seat.mcp-file}}"
+if [[ -n "$PS_MCP_FILE" ]]; then
+  PS_MCP_FILE="$MCP_DIR/$PS_MCP_FILE"
+  assert_json_file "$PS_MCP_FILE" "$PS_NAME mcp-config"
+  for _flag in {{seat.mcp-asserts}}; do
+    case "$_flag" in
+      exa-egress-restriction) assert_exa_restricted "$PS_MCP_FILE" ;;
+      agentmemory-mask)       assert_mcp_authored "$PS_MCP_FILE" agentmemory ;;
+      -|"") ;;
+    esac
+  done
+  assert_memory_endpoint "$PS_MCP_FILE" "$MEMORY_BACKEND"
+fi
+# ambient-registry seats: per-agent MCP config is INERT; the seat's whole MCP surface is the ambient
+# registry ({{RUNTIME_MCP_MOUNT}}), which no squad script owns. Assert its seat-critical servers.
+[[ -n "{{seat.ambient-registry}}" ]] && assert_ambient_registry "{{seat.ambient-registry}}" {{seat.ambient-critical}}
+provision_agent   # create-or-update, re-pinning --custom-args in BOTH branches
+# skills are minted + their generic bodies installed at P5 (SKILL_UUIDS) before this binding step
+[[ -n "{{seat.skill-ids}}" ]] && run multica agent skills set "$PS_ID" --skill-ids "{{seat.skill-ids}}"   # comma-joined FULL SKILL_UUIDS
+# {{/FOREACH}}
+
+echo "Done.$([[ "$DRY" -eq 1 ]] && echo ' (dry run)')  Next: run build-and-apply.sh to apply instructions."

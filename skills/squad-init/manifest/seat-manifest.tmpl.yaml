@@ -1,0 +1,355 @@
+# seat-manifest.tmpl.yaml — the squad roster table.
+#
+# DERIVED at P4 from holes.json — one write direction, no dual mastery (R8). holes.json is THE
+# canonical store; the per-seat fields below DERIVE from it at P4; the three script tables regenerate
+# FROM this manifest; P7 diffs holes.json (not this file). Generates all 3 script tables
+# (build-and-apply.sh seats[], apply-roster.sh agent/runtime/skill bindings, audit-drift.sh seats[])
+# + the constitution MENTION DIRECTORY (kills the triple-maintenance the donor hand-mirrors).
+#
+# VALUE CLASSES (every field is exactly one of):
+#   {{HOLE}}            — a canonical hole from holes.json, filled at P0/P1/P2/P5.
+#                        Map-valued holes are selected per row by key, e.g. {{SEAT_UUIDS.Techlead}}
+#                        selects this seat's key from the SEAT_UUIDS account map. The base name
+#                        (SEAT_UUIDS / SEAT_MODELS / RUNTIME_UUIDS / SKILL_UUIDS / SETTINGS_PROFILE_PATHS)
+#                        is the canonical hole; the dotted suffix is a static key selector.
+#   DERIVED            — computed from other holes at P4/P5 (documented inline + in holes.json "derived").
+#   STATIC             — a constant taken from the donor roster (role suffix, prepend-tier, card path,
+#                        tier, capability class, runtime family, mcp profile-type, assert flags).
+#
+# FOREACH TOKEN CONTRACT (EVERY field the script/table templates in other lanes may reference per row —
+# this list is the closed set; a template token not named here is a coherence bug):
+#   direct row columns:
+#   {{seat.role}} {{seat.name}} {{seat.uuid}} {{seat.card}} {{seat.prepend-tier}}
+#   {{seat.model-class}} {{seat.runtime}} {{seat.runtime-uuid}} {{seat.effort}} {{seat.custom-args}}
+#   {{seat.skills}} {{seat.mcp-profile}} {{seat.mcp-asserts}} {{seat.settings-path}}
+#   ({{seat.skills}} is the SOURCE list — templates never emit it bare; they emit one of the two derived
+#    renderings below, which are NOT format-interchangeable — see {{seat.skill-ids}}/{{seat.skill-prefixes}}.)
+#   {{seat.cap}} {{seat.tier}} {{seat.coach-opt-in}} {{seat.max-conc}} {{seat.visibility}} {{seat.desc}}
+#   DERIVED at P4 (the generator computes these from the columns above + the named holes — NOT hand-authored
+#   per row; see "DERIVED PER-SEAT FIELDS" below):
+#   {{seat.effort-flag}} {{seat.mcp-file}} {{seat.mcp-servers}} {{seat.ambient-registry}} {{seat.ambient-critical}}
+#   {{seat.skill-ids}} {{seat.skill-prefixes}}
+#   Consumers wrap their per-seat regions in {{FOREACH:seat}} … {{/FOREACH}} and mark each region
+#   "generated from seat-manifest.yaml at P4 — do not hand-edit".
+#
+# DERIVED PER-SEAT FIELDS (computed at P4 from this row's columns + the named holes; the generator fills
+# them, never a human — no dual mastery):
+#   {{seat.effort-flag}}      = the {{EFFORT_LEVER.<runtime>}} flag with this row's `effort` LEVEL substituted.
+#                               claude → "--thinking-level <effort>"; opencode → "" (the lever rides custom-args);
+#                               antigravity → "" (the (Level) token is already in the model name). "" when effort=default.
+#   {{seat.mcp-file}}         = the authored per-agent MCP filename for this seat, "<role-slug>-mcp.json", for
+#                               profiles that HAVE a per-agent file; "" for profiles `none` and `ambient`.
+#   {{seat.mcp-servers}}      = the sorted expected server-name set this row's `mcp-profile` resolves to against
+#                               {{MCP_SERVER_CATALOG}} (the audit-drift lane-5 expectation); "-" when empty/ambient.
+#   {{seat.ambient-registry}} = the ambient MCP registry path from {{RUNTIME_MCP_MOUNT.<runtime>}} for
+#                               `ambient`-profile seats (their per-agent config is INERT); "" for every other seat.
+#   {{seat.ambient-critical}} = the space-joined seat-critical server names to assert present in that ambient
+#                               registry (the memory + code-graph + file-find capability the card promises), from
+#                               {{RUNTIME_MCP_MOUNT}}; "" for non-ambient seats.
+#   {{seat.skill-ids}}        = comma-joined FULL {{SKILL_UUIDS.<name>}} values from this row's `skills:` list —
+#                               the `multica agent skills set --skill-ids` argument (apply-roster.sh); "" when
+#                               `skills:` is []. (apply-roster's [[ -n ]] guard then skips the bind.)
+#   {{seat.skill-prefixes}}   = the SORTED, space-joined 8-char id prefixes of the SAME skill set — the
+#                               audit-drift expectation row, matching drift-lib's live comparison
+#                               (jq '[(.skills)[].id[0:8]] | sort | join(" ")'); "-" when `skills:` is []
+#                               (drift-lib maps the "-" sentinel to "" before comparing). NOT interchangeable
+#                               with skill-ids: one is comma-joined full UUIDs, the other space-joined 8-char
+#                               sorted prefixes — collapsing both onto one token cannot satisfy both consumers.
+#
+# TIER GATING: emit only rows whose `tier` is at or below the chosen {{ROSTER_TIER}}
+#   (MIN ⊆ STD ⊆ FULL). Coach additionally requires coach-opt-in == true.
+
+version: 1
+design_doc: research/2026-07-07-multica-squad-skeleton-design.md
+
+squad:
+  name: "{{SQUAD_NAME}}"                    # interview (P2)
+  prefix: "{{SEAT_PREFIX}}"                 # interview (P2) — every derived seat name is prefix + role suffix
+  tier: "{{ROSTER_TIER}}"                   # interview (P2)
+  uuid: "{{SQUAD_UUID}}"                    # account (P5)
+  board: "{{PROJECT_BOARD_UUID}}"           # account (P5)
+  control_issue: "{{CONTROL_ISSUE_KEY}}"    # account (P5)
+  watchdog_autopilot: "{{WATCHDOG_AUTOPILOT_UUID}}"  # account (P5) — STD+ only (no watchdog seat at MIN)
+
+# --- STATIC reference tables (constants, not holes — no dual mastery: these are lookup keys the rows
+#     below reference, and the script templates resolve through). ---
+capability_classes:        # role -> class (design §5); the class RANKS the catalog, it never names a model
+  judgment-class:       [Techlead, Mentor, Coach]           # top reasoning model
+  1M-coder-class:       [Builder]                            # context >=256k AND strong SWE AND cost-favorable
+  reviewer-class:       [Reviewer-Security, Reviewer-Contract, Reviewer-Architecture, QA]  # >=2 families
+  validator-class:      [Validator]                          # read-only judgment (sonnet-class suffices)
+  cheap-watchdog-class: [Monitor]                            # cheapest model passing a 1-shot follow check
+
+mcp_profiles:              # profile-type -> meaning; seat-mcp.tmpl.json authors the concrete server set at
+                           # P4 from {{MCP_SERVER_CATALOG}} (ship broad-then-prune — NOT the donor's pruned set)
+  broad:               "all memory-mounted catalog servers for this runtime (research MCP stays on the Lead)"
+  broad-playwright:    "broad + playwright (only when {{UI_SURFACE}} is present)"
+  cold-review-masked:  "broad minus a live memory backend: agentmemory MASKED to {\"enabled\":false} (COLD review)"
+  hardened-restricted: "broad + exa restricted to a search-only tool (egress the deny profile cannot gate)"
+  memory-only:         "the memory backend only"
+  ambient:             "per-agent MCP config is INERT on this runtime; rides the ambient registry ({{RUNTIME_MCP_MOUNT}})"
+  none:                "no MCP servers"
+
+mcp_assert_flags:          # flag -> the value-assert audit-drift emits (F2: driven by THESE flags, never seat-name literals)
+  agentmemory-mask:       "assert mcpServers.agentmemory == {\"enabled\":false} (the COLD-review exemption is literally true)"
+  exa-egress-restriction: "assert mcpServers.exa.args includes the search-only enabledTools restriction (egress gate)"
+
+tiers: [MIN, STD, FULL]    # MIN subset of STD subset of FULL
+
+# --- The roster: 11 seats. Every value is a {{HOLE}}, a DERIVED expression, or a STATIC constant. ---
+seats:
+
+  - role: Techlead                                   # STATIC role suffix (donor roster)
+    name: "{{SEAT_PREFIX}}-Techlead"                 # DERIVED -> {{LEAD_SEAT_NAME}} (prefix + role suffix)
+    uuid: "{{SEAT_UUIDS.Techlead}}"                  # account (P5) — the two-pass backfill mints this
+    card: roles/lead.md                              # STATIC card path (build-and-apply cats it)
+    prepend-tier: 1                                  # STATIC (0=card only, 1=constitution+card, 2=constitution+_reviewer-common+card)
+    model-class: "{{SEAT_MODELS.Techlead}}"          # probe (P0) resolved model; capability class = judgment-class (STATIC)
+    runtime: claude                                  # STATIC runtime family
+    runtime-uuid: "{{RUNTIME_UUIDS.claude}}"         # probe (P0)
+    effort: high                                     # level; lever = {{EFFORT_LEVER.claude}} (--thinking-level)
+    custom-args: []                                  # STATIC
+    max-conc: null                                   # STATIC — no per-seat cap; shares the {{ENGINE_CONCURRENCY_AND_TIMING}} pool
+    visibility: null                                 # STATIC — workspace default
+    desc: "Squad lead: gates backlog-doc readiness, decomposes it into risk-routed turnkey sub-issues, routes reviewers, and arms/monitors the pipeline to the final PR. Never merges; never deploys."  # STATIC role blurb (--description, <=255 chars)
+    skills:                                          # {{SKILL_UUIDS.<name>}} — names STATIC, ids account (P5)
+      - "{{SKILL_UUIDS.reviewer-panel-degradation-recovery}}"   # STD+ (real panel exists)
+      - "{{SKILL_UUIDS.vertical-slice-issues}}"
+      - "{{SKILL_UUIDS.self-improve}}"
+    mcp-profile: broad                               # STATIC profile-type
+    mcp-asserts: []                                  # STATIC
+    settings-path: null                              # no hardened --settings profile
+    cap: null                                        # MEASURED at P4 (assembled bytes + ~5% headroom); fail-closed on unknown seat
+    tier: MIN                                        # STATIC
+    coach-opt-in: false
+
+  - role: Builder
+    name: "{{SEAT_PREFIX}}-Builder"                  # DERIVED -> {{BUILDER_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Builder}}"                   # account (P5)
+    card: roles/builder.md
+    prepend-tier: 1
+    model-class: "{{SEAT_MODELS.Builder}}"           # probe (P0); capability class = 1M-coder-class (STATIC)
+    runtime: claude
+    runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.claude}} (--thinking-level)
+    custom-args: []
+    max-conc: null                                   # STATIC — shares the pool
+    visibility: null                                 # STATIC — workspace default
+    desc: "Implements one turnkey sub-issue at a time on its feature branch: red-green dev loop, metabolizes the review panel, holds the strict bugfix definition-of-done. Never merges; never touches protected branches."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.builder-dev-loop}}"
+      - "{{SKILL_UUIDS.root-cause-first}}"
+      - "{{SKILL_UUIDS.safe-refactor}}"
+      - "{{SKILL_UUIDS.migration-schema-safety}}"
+      - "{{SKILL_UUIDS.mcp-tool-authoring}}"          # scan-conditional: only when the project builds MCP-tool surfaces
+      - "{{SKILL_UUIDS.self-improve}}"
+    mcp-profile: broad
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: MIN
+    coach-opt-in: false
+
+  - role: Reviewer-Contract                          # the MIN-tier floor reviewer (unconditional summon floor)
+    name: "{{SEAT_PREFIX}}-Reviewer-Contract"        # DERIVED -> {{CONTRACT_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Reviewer-Contract}}"         # account (P5)
+    card: roles/rev-contract.md
+    prepend-tier: 2                                  # STATIC — reviewer bench gets the _reviewer-common tier
+    model-class: "{{SEAT_MODELS.Reviewer-Contract}}"  # probe (P0); capability class = reviewer-class (STATIC)
+    runtime: opencode
+    runtime-uuid: "{{RUNTIME_UUIDS.opencode}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.opencode}} (-c model_reasoning_effort)
+    custom-args: []
+    max-conc: null                                   # STATIC — reviewer bench, no per-seat cap
+    visibility: null                                 # STATIC — workspace default
+    desc: "Contract/API reviewer (binding veto): checks interface, schema, and migration compatibility on the diff. Read-only; reports evidence-backed findings."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.edge-case-hunter}}"
+      - "{{SKILL_UUIDS.migration-schema-safety}}"
+    mcp-profile: broad
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: MIN
+    coach-opt-in: false
+
+  - role: QA
+    name: "{{SEAT_PREFIX}}-QA"                        # DERIVED -> {{QA_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.QA}}"                         # account (P5)
+    card: roles/qa.md
+    prepend-tier: 1
+    model-class: "{{SEAT_MODELS.QA}}"                 # probe (P0); capability class = reviewer-class (STATIC)
+    runtime: opencode
+    runtime-uuid: "{{RUNTIME_UUIDS.opencode}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.opencode}} (-c model_reasoning_effort)
+    custom-args: []
+    max-conc: null                                   # STATIC — shares the pool
+    visibility: null                                 # STATIC — workspace default
+    desc: "End-to-end and edge-case QA: exercises the diff against the harness, hunts non-happy-path failures, reports reproducible evidence. Read-only on the system."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.eval-harness}}"
+      - "{{SKILL_UUIDS.root-cause-first}}"
+      - "{{SKILL_UUIDS.browser-e2e}}"                 # scan-conditional: only when {{UI_SURFACE}} is present
+    mcp-profile: broad-playwright                    # playwright only when {{UI_SURFACE}} present; else broad
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: STD
+    coach-opt-in: false
+
+  - role: Reviewer-Security                          # binding-veto seat (default: strongest reviewer family)
+    name: "{{SEAT_PREFIX}}-Reviewer-Security"        # DERIVED -> {{SECURITY_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Reviewer-Security}}"         # account (P5)
+    card: roles/rev-security.md
+    prepend-tier: 2
+    model-class: "{{SEAT_MODELS.Reviewer-Security}}"  # probe (P0); capability class = reviewer-class (STATIC)
+    runtime: opencode
+    runtime-uuid: "{{RUNTIME_UUIDS.opencode}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.opencode}} (-c model_reasoning_effort)
+    custom-args: []
+    max-conc: null                                   # STATIC — reviewer bench, no per-seat cap
+    visibility: null                                 # STATIC — workspace default
+    desc: "Security reviewer (binding veto): audits the diff for the attack-class catalog and sink exposure on a cold, memory-masked context. Read-only; reports evidence-backed findings."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.llm-gateway-security}}"        # scan-conditional: only on an LLM/agent app (attack-class framework portable, sink inventory EARNED)
+      - "{{SKILL_UUIDS.edge-case-hunter}}"
+    mcp-profile: cold-review-masked                  # agentmemory MASKED -> the mcp-assert below
+    mcp-asserts: [agentmemory-mask]                  # STATIC — drives audit-drift's value-assert (F2: flag, never a seat-name literal)
+    settings-path: null
+    cap: null
+    tier: STD
+    coach-opt-in: false
+
+  - role: Reviewer-Architecture
+    name: "{{SEAT_PREFIX}}-Reviewer-Architecture"    # DERIVED -> {{ARCH_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Reviewer-Architecture}}"     # account (P5)
+    card: roles/rev-arch.md
+    prepend-tier: 2
+    model-class: "{{SEAT_MODELS.Reviewer-Architecture}}"  # probe (P0); capability class = reviewer-class (STATIC). Effort lever is baked in the model token — see effort.
+    runtime: antigravity
+    runtime-uuid: "{{RUNTIME_UUIDS.antigravity}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.antigravity}} — the (High) token IN the model name; NO separate flag, do not lowercase it
+    custom-args: []
+    max-conc: null                                   # STATIC — reviewer bench, no per-seat cap
+    visibility: null                                 # STATIC — workspace default
+    desc: "Architecture reviewer (weighted coherence flag): checks layering, coupling, and concurrency/state shape when a change is broad or touches core orchestration. Read-only; advisory-weighted, not a hard veto."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.architecture-review-method}}"
+      - "{{SKILL_UUIDS.repomix-context-scoping}}"
+      - "{{SKILL_UUIDS.edge-case-hunter}}"
+      - "{{SKILL_UUIDS.self-improve}}"
+    mcp-profile: ambient                             # per-agent config INERT; rides ambient registry ({{RUNTIME_MCP_MOUNT}})
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: STD
+    coach-opt-in: false
+
+  - role: Monitor                                    # standalone stall-watchdog detector (no constitution prepend)
+    name: "{{SEAT_PREFIX}}-Monitor"                  # DERIVED -> {{MONITOR_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Monitor}}"                   # account (P5)
+    card: roles/monitor.md
+    prepend-tier: 0
+    model-class: "{{SEAT_MODELS.Monitor}}"           # probe (P0); capability class = cheap-watchdog-class (STATIC)
+    runtime: opencode
+    runtime-uuid: "{{RUNTIME_UUIDS.opencode}}"
+    effort: default                                  # cheap watchdog: no reasoning bump
+    custom-args: ["--agent", "plan"]                 # STATIC — opencode's cheap plan mode
+    max-conc: null                                   # STATIC — standalone; own cadence, not the shared pool
+    visibility: null                                 # STATIC — workspace default
+    desc: "Stall-watchdog detector: runs a liveness sweep on a cadence, detects the three stall shapes, pokes the stalled seat with a wake, self-pauses when idle. Detect-and-poke only; never reviews or builds."  # STATIC role blurb
+    skills: []
+    mcp-profile: none
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: STD
+    coach-opt-in: false
+
+  - role: Validator                                  # Phase-1.5 spec-grounding seat (FULL tier; §6b sunset tripwire)
+    name: "{{SEAT_PREFIX}}-Validator"                # DERIVED -> {{VALIDATOR_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Validator}}"                 # account (P5)
+    card: roles/validator.md
+    prepend-tier: 1
+    model-class: "{{SEAT_MODELS.Validator}}"         # probe (P0); capability class = validator-class (STATIC)
+    runtime: claude
+    runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.claude}} (--thinking-level)
+    custom-args: ["--max-turns", "40"]               # STATIC — the run fuse pinned alongside the deny profile
+    max-conc: "{{VALIDATOR_FANOUT}}"                 # DERIVED — the intake fan-out cap, STRICTLY BELOW the shared pool (R6); never the raw pool value
+    visibility: null                                 # STATIC — workspace default
+    desc: "Spec-grounding validator (Phase 1.5): grounds a delivered backlog-doc claim against real code/SDK/lib and reports advisory evidence. Never interviews; never discovers; code probes only on member PROBE-OK."  # STATIC role blurb
+    skills:
+      - "{{SKILL_UUIDS.self-improve}}"
+    mcp-profile: hardened-restricted                 # exa restricted -> the mcp-assert below
+    mcp-asserts: [exa-egress-restriction]            # STATIC — drives audit-drift's value-assert (F2: flag, never a seat-name literal)
+    settings-path: "{{SETTINGS_PROFILE_PATHS.validator-hardened}}"  # account (P5) — hardened deny profile install path; donor's home path never ships (R3)
+    cap: null
+    tier: FULL
+    coach-opt-in: false
+
+  - role: Mentor                                     # standalone retrospective curator (no constitution prepend)
+    name: "{{SEAT_PREFIX}}-Mentor"                   # DERIVED -> {{MENTOR_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Mentor}}"                    # account (P5)
+    card: roles/mentor.md
+    prepend-tier: 0
+    model-class: "{{SEAT_MODELS.Mentor}}"            # probe (P0); capability class = judgment-class (STATIC)
+    runtime: claude
+    runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.claude}} (--thinking-level)
+    custom-args: ["--max-turns", "60"]               # STATIC — run fuse pinned in BOTH create and update branches (mentor-1 regression)
+    max-conc: 1                                      # STATIC — single-flight standalone curator
+    visibility: null                                 # STATIC — workspace default
+    desc: "Retrospective curator of a delivered parent + sub-issues: proposes new skills + improvements to used skills, writes memory lessons, hands the human a review packet, and applies proposals once a member authorizes. Never touches code/branches."  # STATIC role blurb
+    skills:                                          # the FULL-tier learning loop
+      - "{{SKILL_UUIDS.skill-harvest}}"
+      - "{{SKILL_UUIDS.review-quality-metrics}}"
+      - "{{SKILL_UUIDS.squad-measurement}}"           # NEW-to-author at build time (R11); no donor id
+    mcp-profile: memory-only
+    mcp-asserts: []
+    settings-path: "{{SETTINGS_PROFILE_PATHS.claude-restricted}}"  # account (P5) — restricted profile install path; donor's home path never ships (R3)
+    cap: null
+    tier: FULL
+    coach-opt-in: false
+
+  - role: Coach                                      # standalone human-learning curator; FULL-tier OPT-IN
+    name: "{{SEAT_PREFIX}}-Coach"                    # DERIVED -> {{COACH_SEAT_NAME}}
+    uuid: "{{SEAT_UUIDS.Coach}}"                     # account (P5)
+    card: roles/coach.md
+    prepend-tier: 0
+    model-class: "{{SEAT_MODELS.Coach}}"             # probe (P0); capability class = judgment-class (STATIC)
+    runtime: antigravity
+    runtime-uuid: "{{RUNTIME_UUIDS.antigravity}}"
+    effort: high                                     # lever = {{EFFORT_LEVER.antigravity}} — the (High) token IN the model name; NO --thinking-level
+    custom-args: []
+    max-conc: 1                                      # STATIC — single-flight standalone curator
+    visibility: private                              # STATIC — standalone human-pedagogy seat, not squad-routable
+    desc: "Personal learning coach for the human: mines a delivered parent + sub-issues for human-learnable lessons and posts a learning issue, building on what was already taught. Read-only on the system."  # STATIC role blurb
+    skills: []                                       # STATIC — no skill by design: the harvest procedure lives in the card (always-loaded)
+    mcp-profile: ambient                             # per-agent config INERT; rides ambient registry ({{RUNTIME_MCP_MOUNT}})
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: FULL
+    coach-opt-in: true                               # the ONLY opt-in seat; skip unless the owner elects the human-pedagogy payoff
+
+  - role: Helper                                     # standalone platform assistant (no constitution prepend)
+    name: "Multica Helper"                           # STATIC platform-native name — the ONE seat NOT prefix-derived (bias rule 5)
+    uuid: "{{SEAT_UUIDS.Helper}}"                    # account (P5)
+    card: roles/helper.md
+    prepend-tier: 0
+    model-class: inherit                             # STATIC — no explicit model pin; inherits the runtime default (donor: model "")
+    runtime: claude
+    runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
+    effort: default                                  # no effort pin
+    custom-args: []
+    max-conc: null                                   # STATIC — platform-native, no pipeline cap
+    visibility: null                                 # STATIC — workspace default
+    desc: "Platform-native assistant seat: answers squad and platform how-to questions. Inherits the runtime default model; no pipeline role."  # STATIC role blurb
+    skills: []
+    mcp-profile: none
+    mcp-asserts: []
+    settings-path: null
+    cap: null
+    tier: FULL                                       # STATIC — ships with the FULL bundle (design §5: "10 + Helper")
+    coach-opt-in: false

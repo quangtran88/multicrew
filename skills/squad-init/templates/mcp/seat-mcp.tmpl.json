@@ -1,0 +1,75 @@
+{
+  "$generated": "authored at P4 from the P0 catalog — reviewed at P4.5 (R9)",
+  "$policy": "freeze-and-diverge (§10.5): a point-in-time extraction of the donor squad's MCP-authoring posture. Donor evolution is NOT auto-backported.",
+  "$surface": "This file is the ONE sanctioned generation surface (R9). The installer AUTHORS each seat's mcp_config from the P0 catalog + the baked patterns below and applies it via `--mcp-config-file`; it does NOT derive-from-live (chicken-and-egg on a fresh squad — there is no live config to mutate). Ship BROAD (the whole catalog per seat); the P0 prune sweep + the runtime measurement loop trim by MEASURED usage. NEVER ship a pre-pruned server set — the already-pruned outcome is earned, not installed.",
+  "$directives": {
+    "{{...}}": "an init hole; canonical value + source live in holes.tmpl.json.",
+    "$from-profile": "at P4, resolve to the concrete `mcpServers` object produced by applying the named profile (see `profiles`) to the catalog.",
+    "$apply": "ordered list of pattern names (see `patterns`) merged onto the profile base, in order.",
+    "$search-query-tool-only": "the search-egress server's query tool name, resolved from the catalog. Every other tool on that server — notably its arbitrary-URL fetch tool — is dropped.",
+    "$profile-vocab": "valid `seat.mcp-profile` values a seat row may carry: broad | broad-cold | broad-hardened | ambient."
+  },
+
+  "catalog": {
+    "$base": "{{MCP_SERVER_CATALOG}}",
+    "$doc": "the full per-account MCP server set probed at P0 (server-key -> launch config). This is the broad base for every non-ambient seat. Two roles inside it are load-bearing for the baked patterns and the constitution MEMORY clause:",
+    "memory-backend": {
+      "endpoint": "{{MEMORY_BACKEND_URL_API}}",
+      "$doc": "the recall/save server (constitution MEMORY). Its server-key, endpoint, and tool-call names ARE the {{MEMORY_BACKEND_URL_API}} probe — the donor's loopback endpoint NEVER ships. Present-and-active in every memory-mounted profile; suppressed for this seat by memory-tool-mask on COLD-review profiles."
+    },
+    "search-egress": {
+      "$doc": "the web-search server that ALSO exposes an arbitrary-URL fetch tool. search-egress-restriction keeps the query tool and drops the fetch tool — the outbound-GET channel a filesystem/command `--settings` deny profile cannot see."
+    }
+  },
+
+  "patterns": {
+    "memory-tool-mask": {
+      "target": "catalog.memory-backend",
+      "merge": { "enabled": false },
+      "$doc": "COLD-review hardening. A per-agent mcp_config merges OVER the ambient one, so an {\"enabled\": false} stub on the memory server suppresses it for this seat — makes the constitution's COLD-review exemption literally true (the seat carries no recalled prior conclusion into a fresh review). audit-drift asserts the mask is present when a seat's mcp-asserts include `memory-masked`."
+    },
+    "search-egress-restriction": {
+      "target": "catalog.search-egress",
+      "merge": { "enabledTools": "$search-query-tool-only" },
+      "$doc": "egress hardening for a code-probing seat. The stdio server's enabledTools arg is the REAL gate — a `--settings` deny profile cannot gate an in-process outbound GET. Fail-loud asserted right after authoring: a sparse catalog would emit a null/absent server and pass silently, so assert the server is a non-null object AND the fetch tool is gone before applying. audit-drift asserts the restriction when a seat's mcp-asserts include `search-egress-restricted`."
+    }
+  },
+
+  "profiles": {
+    "broad": {
+      "base": "{{MCP_SERVER_CATALOG}}",
+      "$apply": [],
+      "$doc": "every server the account exposes, memory active. Default for memory-mounted pipeline + curator seats. Research and documentation servers stay here by default (no dedicated research seat). Ship broad — prune by measured usage later."
+    },
+    "broad-cold": {
+      "base": "{{MCP_SERVER_CATALOG}}",
+      "$apply": ["memory-tool-mask"],
+      "$doc": "broad catalog with memory suppressed — COLD-review posture (a binding review lens reviews with no recalled priors). audit-asserts: memory-masked."
+    },
+    "broad-hardened": {
+      "base": "{{MCP_SERVER_CATALOG}}",
+      "$apply": ["search-egress-restriction"],
+      "$doc": "broad catalog with the search server's arbitrary-URL fetch tool stripped — for a seat that runs member-authorized code probes. Pairs with the hardened `--settings` deny profile (see deny-profiles.tmpl.json). audit-asserts: search-egress-restricted."
+    },
+    "ambient": {
+      "base": {},
+      "mount": "{{RUNTIME_MCP_MOUNT}}",
+      "assert-registered": "{{MCP_SERVER_CATALOG}}",
+      "$doc": "ambient-registry runtime: the per-agent mcp_config is INERT (the runtime reads {{RUNTIME_MCP_MOUNT}} instead). Emit an EMPTY per-agent mcpServers and, at apply time, assert every seat-critical catalog server is registered in the ambient mount — warn LOUDLY (non-fatal) on any miss, because no squad script owns that registry."
+    }
+  },
+
+  "//seat_configs": "generated from seat-manifest.yaml at P4 — do not hand-edit. One authored mcp_config per seat, profile-resolved from the row's `mcp-profile`; applied via `--mcp-config-file` (never derive-from-live on a fresh squad).",
+  "seat_configs": [
+    {{FOREACH:seat}}
+    {
+      "seat": "{{seat.role}}",
+      "runtime": "{{seat.runtime}}",
+      "profile": "{{seat.mcp-profile}}",
+      "asserts": "{{seat.mcp-asserts}}",
+      "settings_path": "{{seat.settings-path}}",
+      "mcp_config": { "mcpServers": { "$from-profile": "{{seat.mcp-profile}}" } }
+    }
+    {{/FOREACH}}
+  ]
+}

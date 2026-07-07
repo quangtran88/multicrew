@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# build-and-apply.sh — assemble constitution + role card → apply to each seat.
+# Thin wrapper over lib/assemble-lib.sh: the seat table + measured byte caps are generated from
+# seat-manifest.yaml; the engine (verify-by-readback, byte linter, collect-and-continue) is the lib.
+# Re-run after editing the constitution or any role card.
+#   --dry : print assembled prompts + sizes, apply nothing.
+cd "$(dirname "$0")"
+source lib/assemble-lib.sh    # sets `set -uo pipefail` (batch collects-and-continues, never aborts)
+
+DRY=0; [[ "${1:-}" == "--dry" ]] && DRY=1
+
+# Platform instruction-size hard limit — a floor no assembled card may cross (the engine silently
+# truncates a prompt above it). Probed at P0, carried in holes.json. Fail-closed: without it we cannot
+# run the hard-cap assert, so we refuse rather than apply blind.
+HOLES_JSON="${MCA_HOLES_JSON:-manifest/holes.json}"
+PLATFORM_LIMIT="$(jq -r '(.holes.PLATFORM_INSTRUCTION_LIMIT.value // .holes.PLATFORM_INSTRUCTION_LIMIT // .PLATFORM_INSTRUCTION_LIMIT // empty)' "$HOLES_JSON" 2>/dev/null || true)"
+if ! [[ "$PLATFORM_LIMIT" =~ ^[0-9]+$ ]]; then
+  echo "✗ platform instruction-size limit unreadable from $HOLES_JSON (PLATFORM_INSTRUCTION_LIMIT) — refusing to apply without the hard-cap assert" >&2
+  exit 1
+fi
+
+# Measured byte caps, keyed by seat: each is the seat's assembled size at init + ~5% headroom, MEASURED
+# (never a hand-tuned literal table). An unrecognized seat FAILS CLOSED — never a silent default cap
+# (a roster/prefix change must re-measure, not fall through).
+declare -A SEAT_CAP=(
+# {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
+  ["{{seat.name}}"]="{{seat.cap}}"
+# {{/FOREACH}}
+)
+cap_for(){
+  local c="${SEAT_CAP[$1]:-}"
+  if [[ -z "$c" ]]; then
+    echo "✗ no measured byte cap for seat '$1' — fail-closed (re-measure the manifest; never default a cap)" >&2
+    return 1
+  fi
+  printf '%s' "$c"
+}
+
+# seat rows: uuid|name|card|prepend-tier (0=card only, 1=constitution+card, 2=constitution+_reviewer-common+card)
+seats=(
+# {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
+  "{{seat.uuid}}|{{seat.name}}|{{seat.card}}|{{seat.prepend-tier}}"
+# {{/FOREACH}}
+)
+
+for row in "${seats[@]}"; do
+  IFS='|' read -r id name card prepend <<<"$row"
+  cap="$(cap_for "$name")" || exit 1
+  apply_seat "$DRY" "$id" "$name" "$prepend" "$card" "$cap" "$PLATFORM_LIMIT"
+done
+
+echo "== {{SQUAD_NAME}} squad instructions <- squad.md"
+if [[ "$DRY" -eq 0 ]]; then
+  if multica squad update "{{SQUAD_UUID}}" --instructions "$(cat squad.md)" >/dev/null; then
+    echo "   applied."
+  else
+    echo "   ✗ squad apply FAILED — continuing"; fails+=("{{SQUAD_NAME}} squad")
+  fi
+fi
+
+report_fails "$DRY"                       # exits non-zero if any seat failed or drifted
+[[ "$DRY" -eq 0 ]] && warn_uncommitted    # applied-but-uncommitted drift guard (WARN-only)

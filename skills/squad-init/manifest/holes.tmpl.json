@@ -1,0 +1,636 @@
+{
+  "_meta": {
+    "version": 1,
+    "design_doc": "the 2026-07-07 squad-skeleton design review (internal to the donor; not shipped)",
+    "partition_detail": "its clause-level partition companion (internal; not shipped)",
+    "what_this_is": "THE canonical customization store (R8). Every {{HOLE}} in every template resolves from here. seat-manifest.tmpl.yaml DERIVES its per-seat fields from this file at P4 (one write direction, no dual mastery); the 3 script tables regenerate from the manifest; P7 diffs THIS file against a fresh scan/probe. Also the upgrade-mode (P7) baseline and the embedded-interview-metadata fossilization guard.",
+    "hole_source_counts": { "account": 7, "probe": 11, "scan": 18, "interview": 7, "earned": 1, "total": 44 },
+    "filled_by_legend": { "P0": "preflight probe", "P1": "repo scan", "P2": "interview", "P5": "create/backfill/apply", "retro-loop": "the Mentor/harvest loop over real deliveries (post-init)" },
+    "map_valued_holes": "SEAT_UUIDS, SEAT_MODELS, RUNTIME_UUIDS, SKILL_UUIDS, SETTINGS_PROFILE_PATHS, EFFORT_LEVER and MCP_SERVER_CATALOG are MAPS. Templates select one key per row with a dotted suffix, e.g. {{SEAT_UUIDS.Techlead}} or {{EFFORT_LEVER.antigravity}} (EFFORT_LEVER keys by runtime family) — the base name is the canonical hole; the suffix is a static key selector into its value map. Only the base names count against the 44.",
+    "baked_defaults_register": {
+      "note": "Overridable later (at P3 proposal or a soft-override knob), NEVER asked at init. These replace former interview questions (adversarial F4/F6/F7/F9/F10 + §10).",
+      "BINDING_VETO_SEATS": "STATIC, baked in card prose (F6): Reviewer-Security + Reviewer-Contract are BINDING vetoes; Reviewer-Architecture is a WEIGHTED coherence flag (not a hard veto); Validator is ADVISORY (never vetoes). Override at the P3 roster proposal.",
+      "STRONGEST_FAMILY_TO_BINDING_VETO": "STATIC default (§5): the strongest reviewer family is assigned to the binding-veto seat. Override at P3.",
+      "MONITOR_THRESHOLDS": "STATIC constants matching the donor card (F7): stall-idle 30 min, re-poke cooldown 40 min, single-flight lock staleness 15 min. Soft-override knobs later; do not gate init.",
+      "WORKSPACE_LANGUAGE": "STATIC English (F9) + one inline override comment on the Helper Tone clause. Not an interview question.",
+      "ROUTE_GLOBS_UNIVERSAL": "STATIC (F10): near-universal security globs + the docs-inert allowlist ship verbatim in route.sh; only module-specific additive globs are scanned into {{ROUTE_GLOBS}}.",
+      "ARCH_THRESHOLDS": "STATIC constants matching the donor rev-arch card: summon Architecture at >8 files OR crosses >=3 modules OR touches core orchestration/async/locking/queue/state.",
+      "BYTE_CAPS": "STATIC policy (F3): measured at P4 (assembled bytes + ~5% headroom), keyed by seat, unknown seat FAILS CLOSED; the init linter hard-fails by default. Never the donor's hand-tuned numbers.",
+      "RESEARCH_MCP_ON_LEAD": "STATIC default (§10): research MCP servers stay on the Lead seat.",
+      "DEDICATED_SQUAD_PER_PROJECT": "STATIC default (§10): one dedicated squad per project.",
+      "CONDITIONAL_SKILLS_BY_SCAN": "STATIC default (F5): browser-e2e / llm-gateway-security / mcp-tool-authoring are auto-included by scan surface, not an owner byte-tradeoff question; runbook notes prune-later."
+    },
+    "fossilization_guard": "Every probe hole is stamped re_validate_per_engine_version:true and every scan hole is re-derivable at P1. P7 re-runs scan+probe, diffs fresh values against the `value` fields here, and asks the owner to confirm drifted globs/CI-names/ports/engine-facts before re-emitting affected artifacts. This file's stored values ARE the P7 upgrade baseline — the anti-Init-Fossilization loop (F11). Earned content is NOT a hole and is not restorable from here; P7 preserves it via the fenced-EARNED extract-and-reinject merge (R1).",
+    "no_smuggled_specificity": "donor_example fields below are the ONLY place donor literals are permitted anywhere under manifest/ (per the packaging rule). They are the installer's reference for what a filled value looks like — never copied into an emitted artifact."
+  },
+
+  "holes": {
+
+    "SEAT_UUIDS": {
+      "name": "SEAT_UUIDS",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/build-and-apply.sh.tmpl", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl", "templates/constitution.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/roles/helper.md.tmpl", "templates/scripts/post-verdict.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "map role->agent-uuid: {Techlead: <uuid>, Builder: <uuid>, QA: <uuid>, Reviewer-Security: <uuid>, Reviewer-Contract: <uuid>, Reviewer-Architecture: <uuid>, Validator: <uuid>, Mentor: <uuid>, Coach: <uuid>, Monitor: <uuid>, 'Multica Helper': <uuid>}"
+    },
+
+    "SQUAD_UUID": {
+      "name": "SQUAD_UUID",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/build-and-apply.sh.tmpl", "templates/scripts/apply-roster.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "<uuid> (the donor squad)"
+    },
+
+    "PROJECT_BOARD_UUID": {
+      "name": "PROJECT_BOARD_UUID",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/roles/lead.md.tmpl", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "<uuid> (the board every `multica issue create` targets; alias PROJECT_ID/BOARD_PROJECT_UUID)"
+    },
+
+    "CONTROL_ISSUE_KEY": {
+      "name": "CONTROL_ISSUE_KEY",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/roles/lead.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/scripts/audit-drift.sh.tmpl", "skills/skill-harvest/SKILL.md", "skills/review-quality-metrics/SKILL.md", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "ACM-24 (single issue homing validation_ledger + pending_harvest + review/cost streams + Monitor's single-flight lock; aliases CONTROL_ISSUE_ID/VALIDATION_LEDGER_ISSUE/HARVEST_LEDGER_ISSUE/VALIDATOR_LEDGER_TICKET). The AP_DESC autopilot tick-prompt templates on this (R4)."
+    },
+
+    "WATCHDOG_AUTOPILOT_UUID": {
+      "name": "WATCHDOG_AUTOPILOT_UUID",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/roles/lead.md.tmpl", "templates/squad.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/scripts/audit-drift.sh.tmpl", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "<uuid> (the */20 stall autopilot; Lead arms at readiness PASS, Monitor self-pauses on idle; aliases WATCHDOG_AUTOPILOT_ID/MONITOR_AUTOPILOT_ID). STD+ only — no watchdog at MIN."
+    },
+
+    "SKILL_UUIDS": {
+      "name": "SKILL_UUIDS",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl"],
+      "donor_example": "map generic-skill-name->skill-uuid (ONLY the generic skills ship; the donor's harvested project-skills and api-wire-oracles are EARNED, never seeded): {vertical-slice-issues: <uuid>, self-improve: <uuid>, skill-harvest: <uuid>, review-quality-metrics: <uuid>, llm-gateway-security: <uuid>, edge-case-hunter: <uuid>, migration-schema-safety: <uuid>, architecture-review-method: <uuid>, repomix-context-scoping: <uuid>, browser-e2e: <uuid>, eval-harness: <uuid>, root-cause-first: <uuid>, builder-dev-loop: <uuid>, mcp-tool-authoring: <uuid>, safe-refactor: <uuid>, reviewer-panel-degradation-recovery: <uuid>, squad-measurement: <NEW — authored at build time (R11), no donor id>}"
+    },
+
+    "SETTINGS_PROFILE_PATHS": {
+      "name": "SETTINGS_PROFILE_PATHS",
+      "source": "account",
+      "filled_by": "P5",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/apply-roster.sh.tmpl", "templates/roles/validator.md.tmpl", "templates/mcp/deny-profiles.tmpl.json"],
+      "donor_example": "map profile-name->install-path for the two hardened seats (the donor's home paths NEVER ship — R3; the installer writes fresh paths on the target machine): {validator-hardened: ~/.config/multica-validator-hardened.json, claude-restricted: ~/.config/multica-claude-restricted.json}"
+    },
+
+    "OWNER_MENTION": {
+      "name": "OWNER_MENTION",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/helper.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl", "skills/skill-harvest/SKILL.md"],
+      "donor_example": "[@Quang Tran](mention://member/<owner-member-uuid>) — the member mention link the harvest/handoff seats notify; a member mention notifies the human and spawns no run (aliases PRODUCT_OWNER_MEMBER/OWNER_MENTION_URI)"
+    },
+
+    "SEAT_MODELS": {
+      "name": "SEAT_MODELS",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "resolved BY CAPABILITY CLASS (§5) — never hardcoded; P0 ranks the account catalog. map role->model: {Techlead: claude-opus-4-8, Builder: claude-sonnet-5, QA: openai/gpt-5.5, Reviewer-Security: openai/gpt-5.5, Reviewer-Contract: openai/qwen3.7-max, Reviewer-Architecture: 'Gemini 3.1 Pro (High)', Validator: claude-sonnet-5, Mentor: claude-opus-4-8, Coach: 'Gemini 3.1 Pro (High)', Monitor: openai/glm-5.2, 'Multica Helper': '' (inherits runtime default)}"
+    },
+
+    "RUNTIME_UUIDS": {
+      "name": "RUNTIME_UUIDS",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "map runtime-family->uuid: {claude: <uuid>, opencode: <uuid>, antigravity: <uuid>}"
+    },
+
+    "EFFORT_LEVER": {
+      "name": "EFFORT_LEVER",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/apply-roster.sh.tmpl", "templates/roles/rev-arch.md.tmpl"],
+      "donor_example": "per-runtime effort lever (the flag shape differs by runtime; the LEVEL, e.g. 'high', lives per-seat in the manifest): {claude: '--thinking-level <level>', codex: '--thinking-level <level>', opencode: '--custom-args [\"-c\",\"model_reasoning_effort=<level>\"]' (cliproxy; provider-prefixed model id), antigravity: 'the (<Level>) token IS embedded in the model name — no separate flag; do not lowercase it'}"
+    },
+
+    "MCP_SERVER_CATALOG": {
+      "name": "MCP_SERVER_CATALOG",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/mcp/seat-mcp.tmpl.json", "templates/mcp/deny-profiles.tmpl.json", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/qa.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "SHIP BROAD-THEN-PRUNE (never the donor's already-pruned outcome — that's EARNED by the measurement loop). Broad catalog: agentmemory, context7, deepwiki, exa, fff, gitnexus, perplexity, playwright. The donor later pruned morph-mcp (0 calls) and composio (broke a run) — do NOT pre-prune; the STANDARD-tier usage sweep prunes (F12)."
+    },
+
+    "MEMORY_BACKEND_URL_API": {
+      "name": "MEMORY_BACKEND_URL_API",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/constitution.md.tmpl", "templates/mcp/seat-mcp.tmpl.json", "templates/scripts/apply-roster.sh.tmpl", "skills/self-improve/SKILL.md", "emitted/PIPELINE.md"],
+      "donor_example": "the memory-server endpoint + its tool-call names (backend-specific — R12): {backend: agentmemory, url: http://localhost:3111, tool_calls: [memory_lesson_recall, memory_smart_search, memory_lesson_save]}. The donor endpoint never ships (R3); the constitution MEMORY clause consumes the tool-call names, not literals."
+    },
+
+    "RUNTIME_SKILL_AUTOLOAD": {
+      "name": "RUNTIME_SKILL_AUTOLOAD",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/roles/rev-arch.md.tmpl", "templates/roles/mentor.md.tmpl"],
+      "donor_example": "per-runtime bound-skill autoload behavior: {claude: 'does NOT auto-load bound skills — READ them from disk with an imperative Read line', antigravity: 'does NOT auto-load — READ from disk', opencode: 'natively invokes bound skills (delivers AND loads)'}"
+    },
+
+    "RUNTIME_MCP_MOUNT": {
+      "name": "RUNTIME_MCP_MOUNT",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/roles/rev-arch.md.tmpl", "templates/roles/coach.md.tmpl", "templates/scripts/apply-roster.sh.tmpl", "manifest/seat-manifest.tmpl.yaml"],
+      "donor_example": "per-runtime MCP mount point: {antigravity: 'per-agent mcp_config is INERT — rides the ambient global registry ~/.gemini/config/mcp_config.json owned by no script; assert-critical-servers-present (non-fatal warn)', claude: 'per-agent mcp_config honored', opencode: 'per-agent mcp_config merges OVER global'}"
+    },
+
+    "ENGINE_WAKE_SEMANTICS": {
+      "name": "ENGINE_WAKE_SEMANTICS",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/scripts/post-verdict.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "engine wake facts (the #1 stall class — RE-VALIDATE per engine version): a completed task run is TERMINAL and the runtime does NOT redeliver the wakeup; an end-marker + a full mention link IS the wake; a plain @Name or edited comment fires nothing; native child->done wakes the parent."
+    },
+
+    "ENGINE_CONCURRENCY_AND_TIMING": {
+      "name": "ENGINE_CONCURRENCY_AND_TIMING",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/roles/lead.md.tmpl", "templates/roles/monitor.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "shared-pool size + timing (per-seat fan-outs are DERIVED strictly BELOW the pool, never the raw value — see derived.VALIDATOR_FANOUT, R6): {shared_pool: 4 slots (Lead/Builder/Mentor/Validator share), queued_offline_threshold: '>5 min ⇒ runtime offline', max_attempts: 2 (infra auto-retry once), stall_timings: '~5 min / ~20 min', monitor_cadence: 'every ~20 min'}"
+    },
+
+    "RUNTIME_QUIRKS": {
+      "name": "RUNTIME_QUIRKS",
+      "source": "probe",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/_reviewer-common.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/roles/coach.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "grab-bag of engine/runtime-version quirks to re-probe (aliases SMART_SEARCH_QUIRK/MEMORY_SEARCH_QUIRK/POST_VERDICT_HELPER_FACT/RENDERER_SUPPORTS_DETAILS_FOLD/RUNTIME_RUN_FUSE/RUNTIME_RETRY_SEMANTICS/FAILED_RUN_ERROR_TAXONOMY/TRIGGER_MISS_BUG_PRESENT/MODEL_CONTEXT_ADVANTAGE): {smart_search: 'ignores the project arg', opencode: 'empty-output-completed detection', antigravity: 'npx-hang; ignores --max-turns; NOT auto-retried — post BLOCKED before the flaky call exhausts', renderer: 'supports HTML <details>/<summary> fold', trigger_miss_bug: 'present? (the post-dispatch-mention-no-run class)'}"
+    },
+
+    "PROJECT_NAME": {
+      "name": "PROJECT_NAME",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/squad.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/qa.md.tmpl", "templates/roles/coach.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl"],
+      "donor_example": "acme (the product/repo name; alias REPO_NAME on reviewer/validator identity lines)"
+    },
+
+    "MEMORY_PROJECT_SLUG": {
+      "name": "MEMORY_PROJECT_SLUG",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl", "skills/self-improve/SKILL.md", "emitted/PIPELINE.md"],
+      "donor_example": "acme (the agentmemory project scope for recall/save; alias PROJECT_SLUG)"
+    },
+
+    "ISSUE_KEY_PREFIX": {
+      "name": "ISSUE_KEY_PREFIX",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/coach.md.tmpl", "templates/scripts/post-verdict.sh.tmpl"],
+      "donor_example": "QUA (the board's issue-key prefix, e.g. ACM-123; the NO-GITHUB-APP clause + post-verdict usage example reference it — R4)"
+    },
+
+    "STACK_DESCRIPTION": {
+      "name": "STACK_DESCRIPTION",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/_reviewer-common.md.tmpl", "templates/roles/validator.md.tmpl"],
+      "donor_example": "TypeScript/Node monorepo (API gateway + extensions/acme-*)"
+    },
+
+    "MODULE_GLOBS": {
+      "name": "MODULE_GLOBS",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/_reviewer-common.md.tmpl", "templates/roles/validator.md.tmpl", "skills/safe-refactor/SKILL.md"],
+      "donor_example": "the repo's module/package globs, e.g. extensions/acme-* (alias EXTENSION_NAMES in safe-refactor)"
+    },
+
+    "TEST_CMD": {
+      "name": "TEST_CMD",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/_reviewer-common.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "skills/builder-dev-loop/SKILL.md", "skills/root-cause-first/SKILL.md", "emitted/PIPELINE.md"],
+      "donor_example": "bun test (ONE canonical hole — dedupes 5 variants across cards/skills; alias TEST_COMMAND)"
+    },
+
+    "TYPECHECK_CMD": {
+      "name": "TYPECHECK_CMD",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/builder.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "npx tsc --noEmit (alias TYPECHECK_COMMAND)"
+    },
+
+    "BUILD_VERIFY_CMDS": {
+      "name": "BUILD_VERIFY_CMDS",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/_reviewer-common.md.tmpl", "templates/roles/qa.md.tmpl", "skills/safe-refactor/SKILL.md", "skills/root-cause-first/SKILL.md", "skills/mcp-tool-authoring/SKILL.md"],
+      "donor_example": "the build/verify command set, e.g. tsc + bun test + vite build (aliases BUILD_CMD/BUILD_UP_COMMAND/FRONTEND_BUILD_CMD/UI_BUILD_COMMAND)"
+    },
+
+    "VCS_CLI": {
+      "name": "VCS_CLI",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/builder.md.tmpl", "templates/roles/lead.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "gh (the VCS-host CLI, from `git remote -v`; swap for another host's CLI; the PR-exists + auth gates use it)"
+    },
+
+    "REPO_ABS_PATH": {
+      "name": "REPO_ABS_PATH",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/qa.md.tmpl", "skills/safe-refactor/SKILL.md"],
+      "donor_example": "~/Code/acme (the gitnexus `repo:` arg on every tooling line; a smuggled coupling — never STATIC; alias GITNEXUS_REPO_PATH)"
+    },
+
+    "BASE_BRANCH": {
+      "name": "BASE_BRANCH",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/lead.md.tmpl", "templates/scripts/route.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "origin/staging (the feature-branch base; also route.sh's diff base — F1: an unresolvable base must raise a loud usage error, never crash exit-128; aliases FEATURE_BASE_BRANCH/STAGING-BASE)"
+    },
+
+    "FEATURE_BRANCH_PATTERN": {
+      "name": "FEATURE_BRANCH_PATTERN",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/lead.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "the feature-branch naming pattern, e.g. feat/<slug> (alias BRANCH_NAMING)"
+    },
+
+    "TARGET_BRANCH": {
+      "name": "TARGET_BRANCH",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/squad.md.tmpl", "templates/roles/lead.md.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "staging (the final-PR merge target; counted once in scan — interview Q5 only CONFIRMS the scanned value, R13; alias MERGE_TARGET_BRANCH)"
+    },
+
+    "CODE_GRAPH_TOOL": {
+      "name": "CODE_GRAPH_TOOL",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/lead.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "templates/roles/coach.md.tmpl", "skills/safe-refactor/SKILL.md", "skills/architecture-review-method/SKILL.md"],
+      "donor_example": "gitnexus (the code-graph/impact tool; degrades to file-search when absent; aliases CALLER_IMPACT_TOOL/CODE_INTEL_MCP_TOOLS)"
+    },
+
+    "CI_BASELINE_REVIEWER": {
+      "name": "CI_BASELINE_REVIEWER",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/squad.md.tmpl", "templates/roles/lead.md.tmpl", "templates/scripts/route.sh.tmpl", "emitted/PIPELINE.md"],
+      "donor_example": "rs-pr-reviewer (the external CI reviewer bot the squad's review is additive over; scan the actual check names, never guess — the G1 lesson; aliases EXTERNAL_PR_BOT/CI_BASELINE_REVIEWER_NAME)"
+    },
+
+    "ROUTE_GLOBS": {
+      "name": "ROUTE_GLOBS",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/scripts/route.sh.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "skills/repomix-context-scoping/SKILL.md", "emitted/PIPELINE.md"],
+      "donor_example": "MODULE-SPECIFIC additive globs ONLY (near-universal security globs like **/auth/**, **/gateway/**, .github/** and the docs-inert allowlist ship STATIC — F10). Donor module globs example: **/outreach/**, extensions/acme-multiagent/**. (aliases SECURITY_ROUTE_GLOBS/CONTRACT_ROUTE_GLOBS/SECURITY_PATH_GLOBS/ARCH_PATH_GLOBS/SECURITY_TRIGGER_GLOBS/CONTRACT_TRIGGER_GLOBS/DOCS_INERT_ALLOWLIST/BREADTH_THRESHOLDS/BLAST_RADIUS_GLOBS)"
+    },
+
+    "E2E_HARNESS": {
+      "name": "E2E_HARNESS",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/qa.md.tmpl", "templates/roles/validator.md.tmpl", "skills/eval-harness/SKILL.md", "skills/browser-e2e/SKILL.md", "skills/root-cause-first/SKILL.md", "emitted/PIPELINE.md"],
+      "donor_example": "the whole E2E bundle (inert without a mockable boundary): hermetic-mock + real-LLM commands, mock-LLM port, gateway host:port, mock client API, fault-injection schema, retry cap, smoke/teardown cmds, test-only dir, package manager, app-boot cmd + port range. Donor: make e2e-*, mock-LLM :18800, gateway :18789. (aliases E2E_BRINGUP_CMD/E2E_HERMETIC_CMD/E2E_REAL_CMD/REAL_LLM_CMD/MOCK_LLM_CMD/MOCK_LLM_PORT/GATEWAY_HOST_PORT/MOCK_LLM_CLIENT_API/FAULT_INJECTION_SCHEMA/RETRY_CAP/SMOKE_COMMAND/TEARDOWN_COMMAND/TEST_ONLY_DIR/PACKAGE_MANAGER/APP_BOOT_CMD/APP_PORT_RANGE/REAL_LLM_MAKE_TARGETS/ADMIN_SEED_METHOD/MOCK_OUTBOUND_ENDPOINT/SINGLETON_PORT/PORT_OVERRIDE_ENV/ALT_PORT_EXAMPLE)"
+    },
+
+    "UI_SURFACE": {
+      "name": "UI_SURFACE",
+      "source": "scan",
+      "filled_by": "P1",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/roles/qa.md.tmpl", "skills/browser-e2e/SKILL.md", "templates/mcp/seat-mcp.tmpl.json", "manifest/seat-manifest.tmpl.yaml"],
+      "donor_example": "the web-UI surface (CONDITIONAL — also gates the playwright MCP grant + the browser-e2e skill; whole bundle inert when absent). Donor: the .tsx dashboard / AG-UI + its port + headless auth header + identity mechanism + RBAC test file. (aliases UI_EXTENSION_PATH/UI_PORT/UI_BUILD_COMMAND/HEADLESS_AUTH_HEADER/IDENTITY_MECHANISM/RBAC_TEST_FILE/BROWSER_SKILL_NAME)"
+    },
+
+    "SQUAD_NAME": {
+      "name": "SQUAD_NAME",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/squad.md.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "acme-dev (interview Q1 — the squad's display name)"
+    },
+
+    "SEAT_PREFIX": {
+      "name": "SEAT_PREFIX",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "templates/scripts/build-and-apply.sh.tmpl", "templates/scripts/apply-roster.sh.tmpl", "templates/scripts/audit-drift.sh.tmpl", "templates/scripts/route.sh.tmpl", "templates/constitution.md.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/qa.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-contract.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/validator.md.tmpl", "templates/roles/monitor.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl"],
+      "donor_example": "AC- (interview Q1 — every seat name except the platform-native Helper is SEAT_PREFIX + a STATIC role suffix; e.g. AC-Techlead. All derived.<ROLE>_SEAT_NAME tokens resolve from this)"
+    },
+
+    "ROSTER_TIER": {
+      "name": "ROSTER_TIER",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["manifest/seat-manifest.tmpl.yaml", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "FULL (+ Coach opt-in) — interview Q2. One of MIN / STD / FULL; gates which seat rows the manifest emits. The donor squad is the full 11-seat roster."
+    },
+
+    "EXECUTION_BOUNDARY": {
+      "name": "EXECUTION_BOUNDARY",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/builder.md.tmpl", "templates/roles/lead.md.tmpl", "templates/roles/mentor.md.tmpl", "templates/roles/coach.md.tmpl", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "interview Q3, HARD gate (vague answer blocks init) — the irreversible-action class the squad must NEVER touch. Donor: never touch the VPS / deploys / production infra; the pipeline stops at the final PR. (absorbs IRREVERSIBLE_ACTION_CLASS + DEPLOY_TARGET_NAME — R13)"
+    },
+
+    "MERGE_AUTHORITY": {
+      "name": "MERGE_AUTHORITY",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/squad.md.tmpl", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "interview Q4, HARD gate — the ONE human who is sole merge authority (also the product owner). Distinct from OWNER_MENTION (the probed mention:// link). Donor: the human workspace owner. (alias MERGE_AUTHORITY_NAME)"
+    },
+
+    "PROTECTED_BRANCHES": {
+      "name": "PROTECTED_BRANCHES",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/builder.md.tmpl", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "interview Q5 (scan-seeded), HARD gate — the branches an agent must never push to directly. Donor: staging, main."
+    },
+
+    "DEPLOY_ON_MERGE": {
+      "name": "DEPLOY_ON_MERGE",
+      "source": "interview",
+      "filled_by": "P2",
+      "value": null,
+      "filled_date": null,
+      "interview_answer_verbatim": null,
+      "consumers": ["templates/roles/lead.md.tmpl", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "interview Q6 (confirm — the scannable half comes from the deploy workflow, F8): does the human's `merge` reply double as deploy approval? i.e. does merge->{TARGET_BRANCH} fire a deploy workflow. Answer: yes / no + which workflow."
+    },
+
+    "EARNED": {
+      "name": "EARNED",
+      "source": "earned",
+      "filled_by": "retro-loop",
+      "value": null,
+      "filled_date": null,
+      "consumers": ["templates/constitution.md.tmpl", "templates/roles/rev-security.md.tmpl", "templates/roles/rev-arch.md.tmpl", "templates/roles/coach.md.tmpl", "templates/roles/monitor.md.tmpl", "skills/builder-dev-loop/SKILL.md", "skills/reviewer-panel-degradation-recovery/SKILL.md", "skills/llm-gateway-security/SKILL.md", "skills/squad-measurement/SKILL.md", "skills/repomix-context-scoping/SKILL.md", "skills/architecture-review-method/SKILL.md", "skills/self-improve/SKILL.md", "emitted/PIPELINE.md", "emitted/RUNBOOK.md.tmpl"],
+      "donor_example": "NOT a fill target — the 1 slot family shipped EMPTY on purpose (R1). Fenced regions <!-- EARNED:slot --> … <!-- /EARNED --> the Mentor/harvest loop fills from real deliveries: the security bug-class catalog + '#1-2 bug family' (rev-security), the arch layer-chain + named races (rev-arch), the llm-gateway sink inventory, Coach's worked example + calibration teach examples, the wake-stall incident ref (constitution), the ACM-N/AC-* incident anecdotes (builder-dev-loop, reviewer-panel-degradation-recovery), PIPELINE §8 changelog + §9 see-also, and all {project}-* harvested skills. P7 preserves live EARNED content via extract-and-reinject; a re-emit that shrinks a non-empty region HARD-FAILS."
+    }
+
+  },
+
+  "derived": {
+    "note": "Computed at P4/P5 from the holes above — legal in templates, NOT counted in the 44. Documented so consumers and P7 diffs can resolve them.",
+    "LEAD_SEAT_NAME":     { "rule": "{{SEAT_PREFIX}} + '-Techlead'", "role_suffix": "Techlead" },
+    "BUILDER_SEAT_NAME":  { "rule": "{{SEAT_PREFIX}} + '-Builder'", "role_suffix": "Builder" },
+    "QA_SEAT_NAME":       { "rule": "{{SEAT_PREFIX}} + '-QA'", "role_suffix": "QA" },
+    "CONTRACT_SEAT_NAME": { "rule": "{{SEAT_PREFIX}} + '-Reviewer-Contract'", "role_suffix": "Reviewer-Contract" },
+    "SECURITY_SEAT_NAME": { "rule": "{{SEAT_PREFIX}} + '-Reviewer-Security'", "role_suffix": "Reviewer-Security" },
+    "ARCH_SEAT_NAME":     { "rule": "{{SEAT_PREFIX}} + '-Reviewer-Architecture'", "role_suffix": "Reviewer-Architecture" },
+    "VALIDATOR_SEAT_NAME":{ "rule": "{{SEAT_PREFIX}} + '-Validator'", "role_suffix": "Validator" },
+    "MENTOR_SEAT_NAME":   { "rule": "{{SEAT_PREFIX}} + '-Mentor'", "role_suffix": "Mentor" },
+    "COACH_SEAT_NAME":    { "rule": "{{SEAT_PREFIX}} + '-Coach'", "role_suffix": "Coach" },
+    "MONITOR_SEAT_NAME":  { "rule": "{{SEAT_PREFIX}} + '-Monitor'", "role_suffix": "Monitor" },
+    "HELPER_SEAT_NAME":   { "rule": "STATIC 'Multica Helper' — the ONE seat whose name is platform-native, NOT prefix-derived (bias rule 5)", "role_suffix": "Helper" },
+    "ARCH_SEAT_MODEL":     { "rule": "map-select {{SEAT_MODELS.Reviewer-Architecture}} — the reviewer card's identity-line model token", "source_hole": "SEAT_MODELS", "map_key": "Reviewer-Architecture", "consumers": ["templates/roles/rev-arch.md.tmpl"] },
+    "CONTRACT_SEAT_MODEL": { "rule": "map-select {{SEAT_MODELS.Reviewer-Contract}} — the reviewer card's identity-line model token", "source_hole": "SEAT_MODELS", "map_key": "Reviewer-Contract", "consumers": ["templates/roles/rev-contract.md.tmpl"] },
+    "SECURITY_SEAT_MODEL": { "rule": "map-select {{SEAT_MODELS.Reviewer-Security}} — the reviewer card's identity-line model token", "source_hole": "SEAT_MODELS", "map_key": "Reviewer-Security", "consumers": ["templates/roles/rev-security.md.tmpl"] },
+    "MONITOR_SEAT_UUID":   { "rule": "map-select {{SEAT_UUIDS.Monitor}} — the Monitor's own-UUID self-ID token (used to exclude itself from stall candidates)", "source_hole": "SEAT_UUIDS", "map_key": "Monitor", "consumers": ["templates/roles/monitor.md.tmpl"] },
+    "LEAD_MENTION":       { "rule": "'[@' + {{LEAD_SEAT_NAME}} + '](mention://agent/' + {{SEAT_UUIDS.Techlead}} + ')' — the wake-baking Lead mention", "consumers": ["templates/scripts/post-verdict.sh.tmpl", "templates/roles/monitor.md.tmpl"] },
+    "SEAT_MENTION_DIRECTORY": { "rule": "one line per emitted seat: '[@' + <name> + '](mention://agent/' + {{SEAT_UUIDS.<Role>}} + ')' from the manifest; this is the constitution MENTION DIRECTORY listing (kills triple-maintenance)", "consumers": ["templates/constitution.md.tmpl"] },
+    "VALIDATOR_FANOUT":   { "rule": "STRICTLY BELOW the ENGINE_CONCURRENCY_AND_TIMING shared pool (R6) — reserve slots for Lead/Builder/Mentor first; NEVER the raw pool value. Donor: 2 derived below a 4-slot pool. Round cap 2, ceiling 6.", "computed_at": "P4", "source_hole": "ENGINE_CONCURRENCY_AND_TIMING", "alias": "ENGINE_FANOUT_CAP", "consumers": ["templates/roles/lead.md.tmpl", "emitted/PIPELINE.md"] },
+    "AP_DESC":            { "rule": "the Monitor watchdog autopilot tick-prompt, templated on {{CONTROL_ISSUE_KEY}} (R4): 'Run your liveness DETECTION sweep now, exactly per your Agent Identity instructions (all three stall shapes A/B/C, statuses todo/in_progress/in_review; detect-and-poke only; self-pause per step 7; lock on {{CONTROL_ISSUE_KEY}}).' — the donor embeds its own control-issue key here; audit-drift's lane-4 equality assert consumes this templated form, never a literal.", "computed_at": "P5", "source_hole": "CONTROL_ISSUE_KEY", "consumers": ["templates/scripts/audit-drift.sh.tmpl"] }
+  },
+
+  "aliases": {
+    "note": "detail-file hole name -> resolution (canonical hole | derived token | STATIC default | EARNED fence). So P7 diffs against the older clause-level partition names resolve.",
+    "MERGE_TARGET_BRANCH": "TARGET_BRANCH",
+    "BUILD_CMD": "BUILD_VERIFY_CMDS",
+    "BUILD_UP_COMMAND": "BUILD_VERIFY_CMDS",
+    "FRONTEND_BUILD_CMD": "BUILD_VERIFY_CMDS",
+    "UI_BUILD_COMMAND": "BUILD_VERIFY_CMDS",
+    "TEST_COMMAND": "TEST_CMD",
+    "TYPECHECK_COMMAND": "TYPECHECK_CMD",
+    "MEMORY_BACKEND": "MEMORY_BACKEND_URL_API",
+    "MEMORY_BACKEND_TOOLS": "MEMORY_BACKEND_URL_API",
+    "SMART_SEARCH_QUIRK": "RUNTIME_QUIRKS",
+    "MEMORY_SEARCH_QUIRK": "RUNTIME_QUIRKS",
+    "POST_VERDICT_HELPER_FACT": "RUNTIME_QUIRKS",
+    "RENDERER_SUPPORTS_DETAILS_FOLD": "RUNTIME_QUIRKS",
+    "RUNTIME_RUN_FUSE": "RUNTIME_QUIRKS",
+    "RUNTIME_RETRY_SEMANTICS": "RUNTIME_QUIRKS",
+    "FAILED_RUN_ERROR_TAXONOMY": "RUNTIME_QUIRKS",
+    "TRIGGER_MISS_BUG_PRESENT": "RUNTIME_QUIRKS",
+    "RUNTIME_MCP_QUIRKS": "RUNTIME_QUIRKS",
+    "ENGINE_STALL_SHAPES": "RUNTIME_QUIRKS",
+    "MODEL_CONTEXT_ADVANTAGE": "RUNTIME_QUIRKS",
+    "ENGINE_FANOUT_CAP": "derived.VALIDATOR_FANOUT",
+    "SECURITY_ROUTE_GLOBS": "ROUTE_GLOBS",
+    "CONTRACT_ROUTE_GLOBS": "ROUTE_GLOBS",
+    "SECURITY_PATH_GLOBS": "ROUTE_GLOBS",
+    "ARCH_PATH_GLOBS": "ROUTE_GLOBS",
+    "SECURITY_TRIGGER_GLOBS": "ROUTE_GLOBS",
+    "CONTRACT_TRIGGER_GLOBS": "ROUTE_GLOBS",
+    "DOCS_INERT_ALLOWLIST": "ROUTE_GLOBS (module part; universal allowlist ships STATIC)",
+    "BREADTH_THRESHOLDS": "ROUTE_GLOBS",
+    "BLAST_RADIUS_GLOBS": "ROUTE_GLOBS",
+    "PROJECT_ID": "PROJECT_BOARD_UUID",
+    "BOARD_PROJECT_UUID": "PROJECT_BOARD_UUID",
+    "WATCHDOG_AUTOPILOT_ID": "WATCHDOG_AUTOPILOT_UUID",
+    "MONITOR_AUTOPILOT_ID": "WATCHDOG_AUTOPILOT_UUID",
+    "EXTERNAL_PR_BOT": "CI_BASELINE_REVIEWER",
+    "CI_BASELINE_REVIEWER_NAME": "CI_BASELINE_REVIEWER",
+    "CONTROL_ISSUE_ID": "CONTROL_ISSUE_KEY",
+    "VALIDATION_LEDGER_ISSUE": "CONTROL_ISSUE_KEY",
+    "HARVEST_LEDGER_ISSUE": "CONTROL_ISSUE_KEY",
+    "VALIDATOR_LEDGER_TICKET": "CONTROL_ISSUE_KEY",
+    "HARDENED_SETTINGS_PATH": "SETTINGS_PROFILE_PATHS",
+    "PRODUCT_OWNER_MEMBER": "OWNER_MENTION",
+    "OWNER_MENTION_URI": "OWNER_MENTION",
+    "LEAD_SEAT_UUID": "SEAT_UUIDS (key Techlead)",
+    "MONITOR_AGENT_UUID": "SEAT_UUIDS (key Monitor)",
+    "LEAD_AGENT_MENTION": "derived.LEAD_MENTION",
+    "TECHLEAD_MENTION_URI": "derived.LEAD_MENTION",
+    "PROJECT_SLUG": "MEMORY_PROJECT_SLUG",
+    "REPO_NAME": "PROJECT_NAME",
+    "GITNEXUS_REPO_PATH": "REPO_ABS_PATH",
+    "CALLER_IMPACT_TOOL": "CODE_GRAPH_TOOL",
+    "CODE_INTEL_MCP_TOOLS": "CODE_GRAPH_TOOL",
+    "EXTENSION_NAMES": "MODULE_GLOBS",
+    "FEATURE_BASE_BRANCH": "BASE_BRANCH",
+    "BRANCH_NAMING": "FEATURE_BRANCH_PATTERN",
+    "BRANCH_MODEL": "PROTECTED_BRANCHES + TARGET_BRANCH (interview Q5)",
+    "IRREVERSIBLE_ACTION_CLASS": "EXECUTION_BOUNDARY",
+    "DEPLOY_TARGET_NAME": "EXECUTION_BOUNDARY",
+    "MERGE_AUTHORITY_NAME": "MERGE_AUTHORITY",
+    "SEAT_NAME": "derived.<ROLE>_SEAT_NAME (per card)",
+    "REVIEWER_SEAT_NAMES": "derived seat names (Security/Contract/Architecture)",
+    "SEAT_ROSTER": "derived seat names (from the manifest)",
+    "SEAT_NAMES": "derived seat names (from the manifest)",
+    "SEAT_UUIDS_ALL": "SEAT_UUIDS",
+    "PIPELINE_SEAT_UUIDS": "SEAT_UUIDS",
+    "STANDALONE_SEAT_UUIDS": "SEAT_UUIDS",
+    "HELPER_UUID": "SEAT_UUIDS (key 'Multica Helper')",
+    "SQUAD_ID": "SQUAD_UUID",
+    "SEAT_MODEL": "SEAT_MODELS (per seat)",
+    "REVIEWER_MODEL_SECURITY": "SEAT_MODELS (key Reviewer-Security)",
+    "REVIEWER_MODEL_CONTRACT": "SEAT_MODELS (key Reviewer-Contract)",
+    "REVIEWER_MODEL_ARCH": "SEAT_MODELS (key Reviewer-Architecture)",
+    "VALIDATOR_MODEL": "SEAT_MODELS (key Validator)",
+    "REVIEWER_MODEL_FAMILIES": "SEAT_MODELS",
+    "ANTIGRAVITY_MODEL_EFFORT_TOKEN": "EFFORT_LEVER (antigravity) + SEAT_MODELS",
+    "RUNTIME_EFFORT_LEVER": "EFFORT_LEVER",
+    "MCP_SERVER_SET": "MCP_SERVER_CATALOG (per-seat profile)",
+    "PER_SEAT_MCP_SERVER_SET": "MCP_SERVER_CATALOG (per-seat profile)",
+    "SEAT_MCP_SETS": "MCP_SERVER_CATALOG (per-seat profile)",
+    "VALIDATOR_MCP_SET_AND_EXA_RESTRICTION": "MCP_SERVER_CATALOG + mcp-assert exa-egress-restriction",
+    "SKILL_PATHS": "RUNTIME_SKILL_AUTOLOAD + SKILL_UUIDS",
+    "RUNTIME_SKILL_AUTOLOAD_BEHAVIOR": "RUNTIME_SKILL_AUTOLOAD",
+    "PER_RUNTIME_SKILL_LOAD_DETECTION": "RUNTIME_SKILL_AUTOLOAD",
+    "AMBIENT_MCP_REGISTRY_PATH": "RUNTIME_MCP_MOUNT",
+    "AMBIENT_CRITICAL_SERVERS": "RUNTIME_MCP_MOUNT",
+    "ENGINE_RUN_SEMANTICS": "ENGINE_WAKE_SEMANTICS",
+    "ENGINE_WAKE_BEHAVIOR": "ENGINE_WAKE_SEMANTICS",
+    "MENTION_TRIGGERED_WAKE_BEHAVIOR": "ENGINE_WAKE_SEMANTICS",
+    "NATIVE_CHILD_DONE_WAKE": "ENGINE_WAKE_SEMANTICS",
+    "STALL_TIMING": "ENGINE_CONCURRENCY_AND_TIMING",
+    "ENGINE_QUEUED_OFFLINE_THRESHOLD": "ENGINE_CONCURRENCY_AND_TIMING",
+    "ENGINE_MAX_ATTEMPTS": "ENGINE_CONCURRENCY_AND_TIMING",
+    "ENGINE_RESOURCE_FACTS": "ENGINE_CONCURRENCY_AND_TIMING",
+    "ENGINE_FACTS": "ENGINE_CONCURRENCY_AND_TIMING",
+    "MONITOR_CADENCE": "ENGINE_CONCURRENCY_AND_TIMING",
+    "MEMORY_PROJECT_SLUG_SOURCE": "MEMORY_PROJECT_SLUG",
+    "PROJECT_SLUG_SOURCE": "MEMORY_PROJECT_SLUG",
+    "WORKSPACE_LANGUAGE": "STATIC default English (F9) — not a hole",
+    "BINDING_VETO_SEATS": "STATIC default baked in prose (F6) — not a hole",
+    "ARCH_FILE_THRESHOLD": "STATIC constant (>8 files) — not a hole",
+    "ARCH_MODULE_THRESHOLD": "STATIC constant (>=3 modules) — not a hole",
+    "ARCH_TRIGGER_THRESHOLDS": "STATIC constants — not a hole",
+    "ARCH_ESCALATION_THRESHOLD": "STATIC constant — not a hole",
+    "STALL_IDLE_THRESHOLD_MINUTES": "STATIC constant (30 min, F7) — not a hole",
+    "REPOKE_GUARD_MINUTES": "STATIC constant (40 min, F7) — not a hole",
+    "WAKE_STALL_INCIDENT_REF": "EARNED fence",
+    "INCIDENT_ANECDOTE": "EARNED fence",
+    "WORKED_EXAMPLE_CARD": "EARNED fence",
+    "CALIBRATION_TEACH_EXAMPLES": "EARNED fence",
+    "SINK_INVENTORY": "EARNED fence (llm-gateway-security)",
+    "MIGRATION_HISTORY": "EARNED fence (never ships — clean provisioner instead)",
+    "HARVESTED_SKILLS": "EARNED fence ({project}-* skills — loop OUTPUT, never seeded)",
+    "SECURITY_LENS_SUMMARY": "EARNED fence",
+    "RECURRING_COUPLING_SHAPE": "EARNED fence",
+    "ILLUSTRATIVE_LESSON_EXAMPLE": "EARNED fence",
+    "INVARIANT_EVIDENCE_CITATIONS": "EARNED fence",
+    "LLM_APP_FP_GUARD": "UI_SURFACE-sibling scan flag — ships conditionally when the scan detects an LLM/agent surface (folds into ROUTE_GLOBS/skill-conditional logic)",
+    "HARVEST_TRIGGER_TITLE": "STATIC constant (the skill-harvest issue title convention) — not a hole",
+    "EVAL_HARNESS_SKILL_NAME": "SKILL_UUIDS (key eval-harness)",
+    "BROWSER_SKILL_NAME": "SKILL_UUIDS (key browser-e2e)",
+    "SECURITY_LENS_SKILL_ID": "SKILL_UUIDS (key llm-gateway-security)"
+  }
+}

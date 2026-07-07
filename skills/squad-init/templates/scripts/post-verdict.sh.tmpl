@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# post-verdict.sh — G3 guardrail. Reviewers post their verdict THROUGH this wrapper so the Lead mention
+# (the wake) is baked in and cannot be forgotten — the #1 stall class.
+# Usage: post-verdict.sh <issue-key> <verdict-file>     (or pipe the body on stdin)
+#   e.g. post-verdict.sh {{ISSUE_KEY_PREFIX}}-42 verdict.md
+set -euo pipefail
+
+LEAD_MENTION='{{LEAD_MENTION}}'
+key="${1:?usage: post-verdict.sh <issue-key> <verdict-file|->}"
+src="${2:--}"
+if [[ "$src" == "-" ]]; then body="$(cat)"; else body="$(cat "$src")"; fi
+
+# Refuse to post an incomplete review — the marker is the Lead's completeness signal.
+grep -q '{{{END-REVIEW}}}' <<<"$body" || { echo "post-verdict: body missing {{{END-REVIEW}}} marker — refusing to post an incomplete verdict" >&2; exit 1; }
+
+# Bake the wake in only if the reviewer didn't already include it (idempotent — no double mention).
+if ! grep -qF "$LEAD_MENTION" <<<"$body"; then
+  body="${body}"$'\n\n'"${LEAD_MENTION} — review complete, ready to synthesize."
+fi
+
+printf '%s' "$body" | multica issue comment add "$key" --content-stdin

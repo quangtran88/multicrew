@@ -1,0 +1,14 @@
+{
+  "name": "multicrew",
+  "owner": {
+    "name": "Tran Quang"
+  },
+  "plugins": [
+    {
+      "name": "multicrew",
+      "source": "./",
+      "description": "Install a battle-tested multi-agent dev squad onto a new Multica project (installer, not a generator)."
+    }
+  ],
+  "description": "Marketplace for the multicrew plugin \u2014 install a battle-tested multi-agent dev squad onto a new Multica project."
+}

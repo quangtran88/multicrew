@@ -1,0 +1,11 @@
+{
+  "name": "multicrew",
+  "displayName": "Multicrew",
+  "description": "Installer skill that provisions a battle-tested multi-agent dev squad onto a new Multica project — 44 named holes filled by probe/scan/interview, verbatim battle-tested machinery, earned-slot specialization, byte-cap discipline, and a 5-lane drift audit. An installer, not a generator.",
+  "version": "0.1.0",
+  "author": { "name": "Tran Quang" },
+  "repository": "https://github.com/quangtran88/multicrew",
+  "homepage": "https://github.com/quangtran88/multicrew",
+  "license": "MIT",
+  "keywords": ["multica", "multi-agent", "dev-squad", "installer", "orchestration", "skill"]
+}

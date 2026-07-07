@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# route.sh — deterministic risk-router. The Lead runs this so the diff→specialist mapping is EXECUTED,
+# not eyeballed.
+# Usage: route.sh <base-ref> [<head-ref>]   e.g.  route.sh {{BASE_BRANCH}} HEAD
+#        route.sh <base>...<head>
+# Prints the summoned reviewer set, one per line (empty => docs/config-only => auto-deliver on the CI
+# baseline + Lead skim). {{CI_BASELINE_REVIEWER}} is the always-on CI baseline and is NOT printed here —
+# these are the on-demand bench escalations on top of it.
+set -euo pipefail
+
+# Base ref is a hole (the donor hardcoded a fallback here — F1). An unresolvable base is a loud usage
+# error with exit 2, NEVER a git exit-128 crash on a repo without that ref.
+if [[ "${1:-}" == *...* ]]; then base="${1%%...*}"; head="${1#*...}"
+else base="${1:-}"; head="${2:-HEAD}"; fi
+[[ -z "$base" ]] && base="{{BASE_BRANCH}}"
+[[ -z "$head" ]] && head="HEAD"
+for ref in "$base" "$head"; do
+  git rev-parse --verify --quiet "${ref}^{commit}" >/dev/null 2>&1 \
+    || { echo "route: cannot resolve ref '$ref' — usage: route.sh <base-ref> [<head-ref>]  (or <base>...<head>)" >&2; exit 2; }
+done
+range="${base}...${head}"
+
+files="$(git diff --name-only "$range")"
+[[ -z "$files" ]] && { echo "route: empty diff for '$range'" >&2; exit 0; }
+
+n_files=$(printf '%s\n' "$files" | grep -c . || true)
+# module = top two path segments (extensions/<x>, apps/<x>, packages/<x>, src/<x>…)
+n_modules=$(printf '%s\n' "$files" | awk -F/ 'NF>=2{print $1"/"$2} NF==1{print $1}' | sort -u | grep -c . || true)
+
+security=0 arch=0 nonallowlisted=0
+while IFS= read -r f; do
+  [[ -z "$f" ]] && continue
+  # docs-allowlist = genuinely behavior-inert ONLY. Behavior-bearing config (CI workflows, package
+  # manifests, tool/schema JSON, gateway config) is NOT allowlisted — it falls through to the Contract
+  # floor (and Security for CI/token/secret surfaces).
+  case "$f" in
+    docs/*|*.md|README*|LICENSE*|.editorconfig|.prettierrc*|.eslintrc*|.gitignore|.gitattributes) ;;
+    *) nonallowlisted=1 ;;
+  esac
+  # near-universal security surfaces (ship STATIC — portable across repos)
+  case "$f" in
+    */auth/*|*/rbac/*|*/gateway/*|*.env*|*secret*|*credential*|*/inbound/*|.github/*) security=1 ;;
+  esac
+  # near-universal orchestration/concurrency surfaces (ship STATIC)
+  case "$f" in
+    */dispatch*|*/registry*|*/lifecycle*|*queue*|*lock*|*mutex*|*/state/*) arch=1 ;;
+  esac
+  # module-specific additive surfaces — scanned per project (Architecture escalation). Filled with the
+  # `|`-joined scanned globs, or a plain never-match word (e.g. __no_module_globs__ — NOT an extglob
+  # pattern) when the scan found none, so this arm is always syntactically present.
+  case "$f" in
+    {{ROUTE_GLOBS}}) arch=1 ;;
+  esac
+done <<< "$files"
+
+# size/breadth → Architecture
+{ [[ "$n_files" -gt 8 ]] || [[ "$n_modules" -ge 3 ]]; } && arch=1
+
+if [[ "$nonallowlisted" -eq 0 ]]; then
+  echo "# docs/config-only: no bench specialists — {{CI_BASELINE_REVIEWER}} + CI + Lead skim → auto-deliver" >&2
+  exit 0
+fi
+
+[[ "$security" -eq 1 ]] && echo "{{SECURITY_SEAT_NAME}}"
+# Contract is the UNCONDITIONAL floor: any behavior-bearing diff gets the AC/contract veto (docs-only
+# already auto-delivered above). Security/Architecture are additive escalations ON TOP, never a substitute.
+echo "{{CONTRACT_SEAT_NAME}}"
+[[ "$arch" -eq 1 ]] && echo "{{ARCH_SEAT_NAME}}"
+exit 0

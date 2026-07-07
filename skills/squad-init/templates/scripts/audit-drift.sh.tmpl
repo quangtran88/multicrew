@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# audit-drift.sh — deterministic READ-ONLY drift audit: live squad vs this config dir (zero paid runs).
+# Thin wrapper over lib/drift-lib.sh: the expectation table is generated from seat-manifest.yaml; the
+# 5-lane engine (instructions / model+runtime / skills / MCP-set + flag-driven value asserts / autopilot)
+# is the lib. Exits non-zero on ANY drift with a one-screen report.
+# EXPECTATIONS MIRROR apply-roster.sh + build-and-apply.sh — change a seat there → re-generate this table
+# from the manifest in the SAME commit (the script guards live-vs-config, not config-vs-config).
+cd "$(dirname "$0")"
+source lib/drift-lib.sh       # sets `set -uo pipefail` + defines note/drift_check_seat/drift_check_autopilot/drift_report
+
+# Expectation rows, pipe-delimited:
+#   id|name|card|prepend(0/1/2)|model|runtime-uuid|skills(sorted 8-char id prefixes, - = none)|
+#   mcp(sorted server names, - = empty per-agent config)|mcp-asserts(space-joined flags, - = none)
+# The security VALUE asserts (mask / egress restriction) are driven by the mcp-asserts flags, NEVER a
+# seat-name literal (F2) — any seat prefix keeps them live.
+seats=(
+# {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
+  "{{seat.uuid}}|{{seat.name}}|{{seat.card}}|{{seat.prepend-tier}}|{{seat.model-class}}|{{seat.runtime-uuid}}|{{seat.skill-prefixes}}|{{seat.mcp-servers}}|{{seat.mcp-asserts}}"
+# {{/FOREACH}}
+)
+
+DRIFT_TMP=$(mktemp -d); trap 'rm -rf "$DRIFT_TMP"' EXIT
+for row in "${seats[@]}"; do
+  drift_check_seat "$row"
+done
+
+# lane 4: the watchdog autopilot tick prompt must defer wholly to the card. The equality-assert string is
+# templated on the control issue ({{AP_DESC}} on {{CONTROL_ISSUE_KEY}} — R4), never a donor-issue lock
+# string. Empty autopilot id (a tier with no watchdog) skips the lane.
+drift_check_autopilot "{{WATCHDOG_AUTOPILOT_UUID}}" "{{AP_DESC}}"
+
+drift_report

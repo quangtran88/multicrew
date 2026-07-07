@@ -1,0 +1,79 @@
+{
+  "$generated": "authored at P4 from the P0 catalog — reviewed at P4.5 (R9)",
+  "$policy": "freeze-and-diverge (§10.5): a point-in-time extraction of the donor squad's two hardened `--settings` profiles. Donor evolution is NOT auto-backported.",
+  "$install": {
+    "$doc": "Each profile is written to its {{SETTINGS_PROFILE_PATHS}} entry (account hole; minted at P5, lives OUTSIDE the repo so a `git revert` cannot restore it) and referenced by the consuming seat's `--settings` custom-arg. BEFORE launching a seat, assert its target exists AND parses as JSON — a missing/corrupt target would silently launch the seat with an empty-deny profile. GUARDRAIL, NOT A CAGE: the binding rule is the constitution boundary; these profiles are defense-in-depth.",
+    "path": "{{SETTINGS_PROFILE_PATHS}}"
+  },
+  "$note": "deny-only posture (the donor profiles carry no allow-list). The credential/exec/egress denylists are the portable, battle-tested baseline — denying a path or command that does not exist is a harmless no-op, so P0 may EXTEND them with any extra runtime credential dirs the target account uses. Only donor-absolute paths are holed; the tilde-relative credential paths and the generic command tokens ship as STATIC defaults.",
+
+  "profiles": {
+    "hardened": {
+      "$doc": "code-probing seat (the Validator, Phase 1.5). Full credential read-deny + full exec/egress lockdown so a member-authorized code probe cannot read a secret or open a network channel. Pairs with the broad-hardened MCP profile (search-egress-restricted).",
+      "consumed_by": "the seat whose mcp-asserts include search-egress-restricted",
+      "install_path": "{{SETTINGS_PROFILE_PATHS}}",
+      "settings": {
+        "permissions": {
+          "deny": [
+            "Read(~/.ssh/**)",
+            "Read(~/.aws/**)",
+            "Read(~/.config/gh/**)",
+            "Read(~/.codex/**)",
+            "Read(~/.multica/**)",
+            "Read(**/.env)",
+            "Read(**/.env.*)",
+            "Read(**/*.env)",
+            "Read({{REPO_ABS_PATH}}/.env*)",
+            "Bash(curl:*)",
+            "Bash(wget:*)",
+            "Bash(nc:*)",
+            "Bash(scp:*)",
+            "Bash(ssh:*)",
+            "Bash(rsync:*)",
+            "Bash(ftp:*)",
+            "Bash(telnet:*)",
+            "Bash(git:*)",
+            "Bash(gh:*)",
+            "Bash(python:*)",
+            "Bash(python3:*)",
+            "Bash(deno:*)",
+            "Bash(bunx:*)",
+            "Bash(perl:*)",
+            "Bash(ruby:*)",
+            "Bash(php:*)",
+            "Bash(env)",
+            "Bash(printenv)",
+            "Bash(export:*)",
+            "Bash(npx:*)",
+            "Bash(pnpm:*)",
+            "Bash(yarn:*)",
+            "Bash(pip:*)",
+            "Bash(pip3:*)"
+          ]
+        }
+      }
+    },
+
+    "restricted": {
+      "$doc": "claude-runtime curator seat (the Mentor). Disables ambient plugins so the seat runs lean on ONLY its explicit `--mcp-config` servers, and denies reads of credential/tooling paths plus the profile file itself. The memory backend rides the seat's `--mcp-config`, so its plugin is disabled here too.",
+      "consumed_by": "the curator seat on the claude runtime (memory-mounted, no code-probe grant)",
+      "install_path": "{{SETTINGS_PROFILE_PATHS}}",
+      "settings": {
+        "enabledPlugins": {
+          "$generated-from": "the ambient plugin set probed at P0 (the same preflight that resolves {{MCP_SERVER_CATALOG}})",
+          "$rule": "emit one \"<plugin-id>\": false entry per installed ambient plugin — a restricted seat disables ALL of them and runs on only its explicit `--mcp-config` servers (the memory backend included). Account-coupled, so no plugin ids are baked here. do not hand-edit — regenerated at P4/P7.",
+          "$reviewed": "P4.5 (R9)"
+        },
+        "permissions": {
+          "deny": [
+            "Read(~/.ssh/**)",
+            "Read(~/.config/gh/**)",
+            "Read(~/.codex/**)",
+            "Read(~/.multica/**)",
+            "Read({{SETTINGS_PROFILE_PATHS}})"
+          ]
+        }
+      }
+    }
+  }
+}
