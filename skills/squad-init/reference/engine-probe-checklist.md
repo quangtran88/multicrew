@@ -268,7 +268,8 @@ or times out — the ceiling every assembled card is asserted against at P4.
 1. `agent update --instructions` a scratch seat with progressively larger bodies until it fails with a
    backend error (the donor hit "context deadline exceeded" / "request timed out" on a ~21 KB Techlead body;
    the backend degrades on long uptime / large writes — §8.7).
-2. Record the largest size that reliably lands; if the backend is flaky on big bodies, apply seats
+2. Record the largest size that reliably lands into `holes.json` → `extra_probes.PLATFORM_INSTRUCTION_LIMIT`
+   (`build-and-apply.sh` hard-fails without it); if the backend is flaky on big bodies, apply seats
    INDIVIDUALLY rather than via the batch script.
 3. Feed this limit into P4: every assembled card must be ≤ limit (asserted alongside the measured byte
    caps); the linter hard-fails otherwise.
@@ -296,7 +297,7 @@ into every card on that runtime at P4.
 ## P0 exit checklist
 
 - [ ] All 11 probe holes filled with live-verified values (not donor values).
-- [ ] Platform instruction-size limit recorded; feeds the P4 assert.
+- [ ] Platform instruction-size limit recorded into `holes.json` (`extra_probes.PLATFORM_INSTRUCTION_LIMIT`); feeds the P4 assert + build-and-apply's fail-closed gate.
 - [ ] Skill-autoload table complete per runtime; Read-line requirement flagged.
 - [ ] Reviewer bench spans ≥2 model families distinct from Builder/Lead (STANDARD/FULL) — else REFUSE.
 - [ ] Every filled value stamped with today's date + engine version — the **RE-VALIDATE PER ENGINE VERSION**

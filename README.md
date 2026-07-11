@@ -186,6 +186,7 @@ The installer runs **P0 probe → P1 scan → P2 interview → P3 roster proposa
 - [Claude Code](https://code.claude.com) with plugin support
 - A [Multica](https://multica.ai) account + CLI ([multica-ai/multica](https://github.com/multica-ai/multica)) — the squad platform the installer provisions onto
 - A target git repository for the squad to work on
+- `bash` (3.2+ is fine — stock macOS works) and `jq` — the generated squad scripts and the P4 linter use them
 
 ## Repository layout
 

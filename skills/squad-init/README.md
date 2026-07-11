@@ -65,6 +65,10 @@ These stay owner-adjustable at build time or per squad; the resolution shipped i
 4. **P7 cadence** — *shipped: on-demand, with a suggested cadence* (re-scan after N merged parents; the RUNBOOK names it). Scheduled re-scan remains an option.
 5. **`lib/` dual-maintenance** — *shipped: freeze-and-diverge.* Each extracted `lib/` engine carries a **dated provenance stamp**; donor evolution is **not** auto-backported. The alternative (cherry-pick on a cadence) stays open.
 
+## Tag legend (R# / F# / G# / §#)
+
+Rule and lesson tags cited across SKILL.md, the manifest, and the templates (R1–R13, F1–F25, §-refs) point into the donor's internal clause-level design review — a document that does NOT ship. Wherever a tag matters, its meaning is glossed inline at the point of use (e.g. "R8 — holes.json is canonical; the manifest derives from it"); treat the inline gloss as authoritative and the bare tag as provenance, not a reference you must resolve. G1–G4 are the exception: the emitted PIPELINE.md defines them (§6 "Guardrails & human levers").
+
 ## Package layout note
 
 `skills/` and `emitted/` sit at the **package root** (the design §2 tree sketched them nested under `templates/`) — a deliberate build-time flattening; every in-package reference (SKILL.md, holes.tmpl.json consumers, skills/README.md) uses the root paths.
