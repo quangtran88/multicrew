@@ -35,6 +35,8 @@ assert_agentmemory_mask(){
 # deny profile cannot gate a stdio MCP's own tools). A bare presence check passes a stray
 # `agent update --mcp-config` that re-adds enabledTools=["<fetch-tool>"] and reports the gate intact —
 # so we enforce fetch-tool ABSENCE generically (no hardcoded allowed-tool name = no smuggled specificity).
+# NOTE: the server KEY (.mcpServers.exa) is the donor catalog's search-egress server name — if the target
+# account's search server key differs, rename it here + in provision-lib + the exa-egress-restriction flag.
 assert_exa_restriction(){
   jq -e '
     (.mcp_config.mcpServers.exa.args // []) as $a
@@ -68,6 +70,7 @@ drift_check_seat(){
   # 2. model + runtime
   local lm lrt
   lm=$(jq -r '.model // ""' "$DRIFT_TMP/live.json"); lrt=$(jq -r '.runtime_id // ""' "$DRIFT_TMP/live.json")
+  [[ "$model" == "inherit" ]] && model=""   # manifest sentinel: no model pin — an unpinned live agent reports ""
   [[ "$lm" == "$model" ]] || note "$name: MODEL drift live='$lm' expected='$model'"
   [[ "$lrt" == "$rt"* ]]  || note "$name: RUNTIME drift live='$lrt' expected='$rt…'"
   # 3. skills (compare sorted 8-char id prefixes)
@@ -119,8 +122,9 @@ drift_report(){
 # emit_pipeline [HOLES_JSON] [SEAT_MANIFEST_YAML] — render PIPELINE.md to stdout from the filled stores.
 # holes.json is THE canonical scalar store (R8); the seat roster is read from the filled manifest. The
 # doc is a generated VIEW — no hand-maintained numbers, no donor literals; every project specific is a
-# looked-up value. Uses a quoted heredoc + literal-token substitution so backticks in the prose can
-# never trigger command substitution (keeps the whole lib `bash -n`-clean).
+# looked-up value. The template is loaded via `read -d ''` from a quoted heredoc — NOT via a $(cat)
+# command substitution: pre-4.0 bash (stock macOS 3.2) mis-parses backticks inside a $(<<'heredoc')
+# and EXECUTES the prose, corrupting the emitted doc. read keeps every backtick literal.
 EMIT_HOLES="" ; EMIT_MANIFEST=""
 hj(){ jq -r --arg k "$1" '(.holes[$k].value // .holes[$k] // .derived[$k].value // .derived[$k] // .[$k] // "")' "$EMIT_HOLES"; }
 
@@ -141,6 +145,10 @@ _roster(){
     function val(line){ sub(/^[^:]*:[[:space:]]*/,"",line); sub(/[[:space:]]*#.*$/,"",line); gsub(/^"|"$/,"",line); sub(/[[:space:]]+$/,"",line); return line }
   ' "$EMIT_MANIFEST"
 }
+
+# _seat_name ROLE — the manifest row's live name for ROLE, empty if the tier omits the seat
+# (bash-3.2-safe: no associative array on the stock macOS bash).
+_seat_name(){ _roster | awk -F'\t' -v r="$1" '$1==r{print $2; exit}'; }
 
 _tier_rank(){ case "$1" in MIN) echo 1;; STD) echo 2;; FULL) echo 3;; *) echo 9;; esac; }
 
@@ -179,24 +187,22 @@ emit_pipeline(){
 
   # role -> live seat name from the manifest; fall back to prefix+suffix for a seat absent at this tier
   # (the backbone is generic — an absent seat still gets a correctly-prefixed placeholder name).
-  local -A SEAT_NAME
-  local role name model runtime rtier coach
-  while IFS=$'\t' read -r role name model runtime rtier coach; do SEAT_NAME[$role]="$name"; done < <(_roster)
   local lead builder qa security contract archr validator mentor coach_n monitor
-  lead="${SEAT_NAME[Techlead]:-$prefix-Techlead}"
-  builder="${SEAT_NAME[Builder]:-$prefix-Builder}"
-  qa="${SEAT_NAME[QA]:-$prefix-QA}"
-  security="${SEAT_NAME[Reviewer-Security]:-$prefix-Reviewer-Security}"
-  contract="${SEAT_NAME[Reviewer-Contract]:-$prefix-Reviewer-Contract}"
-  archr="${SEAT_NAME[Reviewer-Architecture]:-$prefix-Reviewer-Architecture}"
-  validator="${SEAT_NAME[Validator]:-$prefix-Validator}"
-  mentor="${SEAT_NAME[Mentor]:-$prefix-Mentor}"
-  coach_n="${SEAT_NAME[Coach]:-$prefix-Coach}"
-  monitor="${SEAT_NAME[Monitor]:-$prefix-Monitor}"
+  lead="$(_seat_name Techlead)";                 [[ -n "$lead" ]]      || lead="$prefix-Techlead"
+  builder="$(_seat_name Builder)";               [[ -n "$builder" ]]   || builder="$prefix-Builder"
+  qa="$(_seat_name QA)";                         [[ -n "$qa" ]]        || qa="$prefix-QA"
+  security="$(_seat_name Reviewer-Security)";    [[ -n "$security" ]]  || security="$prefix-Reviewer-Security"
+  contract="$(_seat_name Reviewer-Contract)";    [[ -n "$contract" ]]  || contract="$prefix-Reviewer-Contract"
+  archr="$(_seat_name Reviewer-Architecture)";   [[ -n "$archr" ]]     || archr="$prefix-Reviewer-Architecture"
+  validator="$(_seat_name Validator)";           [[ -n "$validator" ]] || validator="$prefix-Validator"
+  mentor="$(_seat_name Mentor)";                 [[ -n "$mentor" ]]    || mentor="$prefix-Mentor"
+  coach_n="$(_seat_name Coach)";                 [[ -n "$coach_n" ]]   || coach_n="$prefix-Coach"
+  monitor="$(_seat_name Monitor)";               [[ -n "$monitor" ]]   || monitor="$prefix-Monitor"
 
   # tier-filtered roster table (Markdown)
-  local chosen_rank seat_rank roster_table blurb mdl
+  local chosen_rank seat_rank roster_table blurb mdl role name model runtime rtier coach
   chosen_rank="$(_tier_rank "$tier")"
+  [[ "$chosen_rank" == 9 ]] && echo "emit_pipeline: unknown ROSTER_TIER '$tier' — expected exactly MIN|STD|FULL; roster table will be unfiltered" >&2
   roster_table="| Seat | Runtime / model (live) | Role |"$'\n'"|---|---|---|"
   while IFS=$'\t' read -r role name model runtime rtier coach; do
     seat_rank="$(_tier_rank "$rtier")"
@@ -212,7 +218,8 @@ emit_pipeline(){
   gendate="$(date -u +%Y-%m-%d)"
 
   local doc
-  doc="$(cat <<'PIPE'
+  # bash-3.2-safe load (see header note): read until EOF; read returns 1 there, hence || true.
+  IFS= read -r -d '' doc <<'PIPE' || true
 # @@SQUAD@@ — pipeline runbook (current-state)
 
 <!-- GENERATED by drift-lib.sh emit_pipeline on @@GENDATE@@ from live config @ @@GENSHA@@.
@@ -463,7 +470,7 @@ The most portable block — ship it verbatim:
 <!-- ships empty on purpose — the retro/harvest loop fills this from real deliveries -->
 <!-- /EARNED -->
 PIPE
-)"
+  doc="${doc%$'\n'}"   # match the old $(…) trailing-newline strip so the final printf emits one newline
 
   doc="${doc//@@SQUAD@@/$squad}"
   doc="${doc//@@PROJECT@@/$project}"

@@ -427,7 +427,7 @@
       "filled_date": null,
       "interview_answer_verbatim": null,
       "consumers": ["manifest/seat-manifest.tmpl.yaml", "emitted/RUNBOOK.md.tmpl"],
-      "donor_example": "FULL (+ Coach opt-in) — interview Q2. One of MIN / STD / FULL; gates which seat rows the manifest emits. The donor squad is the full 11-seat roster."
+      "donor_example": "FULL — interview Q2. The recorded value must be EXACTLY one of MIN / STD / FULL (the README display names MIN-VIABLE/STANDARD map to MIN/STD; tier-gating and drift-lib's _tier_rank compare the enum, so never record a display name or a suffix like '(+ Coach opt-in)' — Coach opt-in is the manifest's separate coach-opt-in flag). Gates which seat rows the manifest emits. The donor squad is the full 11-seat roster."
     },
 
     "EXECUTION_BOUNDARY": {
@@ -484,6 +484,20 @@
       "donor_example": "NOT a fill target — the 1 slot family shipped EMPTY on purpose (R1). Fenced regions <!-- EARNED:slot --> … <!-- /EARNED --> the Mentor/harvest loop fills from real deliveries: the security bug-class catalog + '#1-2 bug family' (rev-security), the arch layer-chain + named races (rev-arch), the llm-gateway sink inventory, Coach's worked example + calibration teach examples, the wake-stall incident ref (constitution), the ACM-N/AC-* incident anecdotes (builder-dev-loop, reviewer-panel-degradation-recovery), PIPELINE §8 changelog + §9 see-also, and all {project}-* harvested skills. P7 preserves live EARNED content via extract-and-reinject; a re-emit that shrinks a non-empty region HARD-FAILS."
     }
 
+  },
+
+  "extra_probes": {
+    "note": "Required at P0 but deliberately NOT among the 44 canonical holes: they are never {{...}} template tokens — scripts read them straight from this file. See reference/engine-probe-checklist.md § Extra P0 probes.",
+    "PLATFORM_INSTRUCTION_LIMIT": {
+      "name": "PLATFORM_INSTRUCTION_LIMIT",
+      "source": "probe-extra",
+      "filled_by": "P0",
+      "value": null,
+      "filled_date": null,
+      "re_validate_per_engine_version": true,
+      "consumers": ["templates/scripts/build-and-apply.sh.tmpl"],
+      "donor_example": "a single-seat instruction-body byte ceiling (the donor's backend timed out near a ~21 KB card) plus a batch-vs-individual apply note"
+    }
   },
 
   "derived": {

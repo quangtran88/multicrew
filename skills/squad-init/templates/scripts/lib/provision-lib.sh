@@ -60,6 +60,8 @@ assert_mcp_authored(){
 # enabledTools=["<fetch-tool>"], the exact egress tool the gate exists to remove (F25). We enforce
 # fetch-tool ABSENCE generically (no hardcoded allowed-tool name = no smuggled specificity): the
 # restriction is present AND no enabledTools= arg names a *fetch* tool.
+# NOTE: the server KEY (.mcpServers.exa) is the donor catalog's search-egress server name — if the target
+# account's search server key differs, rename it here + in drift-lib + the exa-egress-restriction flag name.
 assert_exa_restricted(){
   local file="$1"
   jq -e '
@@ -100,8 +102,9 @@ assert_ambient_registry(){
 #
 #   PS_ID PS_NAME PS_RUNTIME_UUID PS_MODEL   — identity + placement
 #   PS_EFFORT (e.g. "--thinking-level high", or "" when the lever is the model token / custom-args)
-#   PS_CUSTOM_ARGS (a JSON array string, or "")   PS_MCP_FILE (authored config, or "")
-#   PS_SETTINGS ("" when none)   PS_MAX_CONC ("" to leave default)   PS_VISIBILITY ("" to leave default)
+#   PS_CUSTOM_ARGS (a JSON array string, or "" — the hardened seats' --settings deny-profile flag rides
+#   IN this array, per the seat-manifest custom-args rows)   PS_MCP_FILE (authored config, or "")
+#   PS_MAX_CONC ("" to leave default)   PS_VISIBILITY ("" to leave default)
 #   PS_INSTR_FILE (card to bootstrap a fresh seat)   PS_DESC (<=255 chars — the server 400s past it)
 provision_agent(){
   local common=( )

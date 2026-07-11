@@ -4,7 +4,8 @@
 # canonical store; the per-seat fields below DERIVE from it at P4; the three script tables regenerate
 # FROM this manifest; P7 diffs holes.json (not this file). Generates all 3 script tables
 # (build-and-apply.sh seats[], apply-roster.sh agent/runtime/skill bindings, audit-drift.sh seats[])
-# + the constitution MENTION DIRECTORY (kills the triple-maintenance the donor hand-mirrors).
+# + the constitution MENTION DIRECTORY + the seat_configs list in mcp/seat-mcp.tmpl.json (kills the
+# triple-maintenance the donor hand-mirrors).
 #
 # VALUE CLASSES (every field is exactly one of):
 #   {{HOLE}}            — a canonical hole from holes.json, filled at P0/P1/P2/P5.
@@ -275,7 +276,7 @@ seats:
     runtime: claude
     runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
     effort: high                                     # lever = {{EFFORT_LEVER.claude}} (--thinking-level)
-    custom-args: ["--max-turns", "40"]               # STATIC — the run fuse pinned alongside the deny profile
+    custom-args: ["--max-turns", "40", "--settings", "{{SETTINGS_PROFILE_PATHS.validator-hardened}}"]   # STATIC — run fuse + the hardened deny profile (F20: custom-args is re-pinned in BOTH provision branches)
     max-conc: "{{VALIDATOR_FANOUT}}"                 # DERIVED — the intake fan-out cap, STRICTLY BELOW the shared pool (R6); never the raw pool value
     visibility: null                                 # STATIC — workspace default
     desc: "Spec-grounding validator (Phase 1.5): grounds a delivered backlog-doc claim against real code/SDK/lib and reports advisory evidence. Never interviews; never discovers; code probes only on member PROBE-OK."  # STATIC role blurb
@@ -297,7 +298,7 @@ seats:
     runtime: claude
     runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
     effort: high                                     # lever = {{EFFORT_LEVER.claude}} (--thinking-level)
-    custom-args: ["--max-turns", "60"]               # STATIC — run fuse pinned in BOTH create and update branches (mentor-1 regression)
+    custom-args: ["--max-turns", "60", "--settings", "{{SETTINGS_PROFILE_PATHS.claude-restricted}}"]   # STATIC — run fuse + restricted deny profile, pinned in BOTH create and update branches (mentor-1 / F20 regression)
     max-conc: 1                                      # STATIC — single-flight standalone curator
     visibility: null                                 # STATIC — workspace default
     desc: "Retrospective curator of a delivered parent + sub-issues: proposes new skills + improvements to used skills, writes memory lessons, hands the human a review packet, and applies proposals once a member authorizes. Never touches code/branches."  # STATIC role blurb
@@ -338,7 +339,7 @@ seats:
     uuid: "{{SEAT_UUIDS.Helper}}"                    # account (P5)
     card: roles/helper.md
     prepend-tier: 0
-    model-class: inherit                             # STATIC — no explicit model pin; inherits the runtime default (donor: model "")
+    model-class: inherit                             # STATIC sentinel — no explicit model pin (donor: model ""); apply-roster maps inherit → no --model flag; audit-drift compares it as live ""
     runtime: claude
     runtime-uuid: "{{RUNTIME_UUIDS.claude}}"
     effort: default                                  # no effort pin

@@ -9,9 +9,9 @@
 
   "profiles": {
     "hardened": {
-      "$doc": "code-probing seat (the Validator, Phase 1.5). Full credential read-deny + full exec/egress lockdown so a member-authorized code probe cannot read a secret or open a network channel. Pairs with the broad-hardened MCP profile (search-egress-restricted).",
-      "consumed_by": "the seat whose mcp-asserts include search-egress-restricted",
-      "install_path": "{{SETTINGS_PROFILE_PATHS}}",
+      "$doc": "code-probing seat (the Validator, Phase 1.5). Full credential read-deny + full exec/egress lockdown so a member-authorized code probe cannot read a secret or open a network channel. Pairs with the hardened-restricted MCP profile (exa-egress-restriction).",
+      "consumed_by": "the seat whose mcp-asserts include exa-egress-restriction (the Validator row)",
+      "install_path": "{{SETTINGS_PROFILE_PATHS.validator-hardened}}",
       "settings": {
         "permissions": {
           "deny": [
@@ -57,7 +57,7 @@
     "restricted": {
       "$doc": "claude-runtime curator seat (the Mentor). Disables ambient plugins so the seat runs lean on ONLY its explicit `--mcp-config` servers, and denies reads of credential/tooling paths plus the profile file itself. The memory backend rides the seat's `--mcp-config`, so its plugin is disabled here too.",
       "consumed_by": "the curator seat on the claude runtime (memory-mounted, no code-probe grant)",
-      "install_path": "{{SETTINGS_PROFILE_PATHS}}",
+      "install_path": "{{SETTINGS_PROFILE_PATHS.claude-restricted}}",
       "settings": {
         "enabledPlugins": {
           "$generated-from": "the ambient plugin set probed at P0 (the same preflight that resolves {{MCP_SERVER_CATALOG}})",
@@ -70,7 +70,7 @@
             "Read(~/.config/gh/**)",
             "Read(~/.codex/**)",
             "Read(~/.multica/**)",
-            "Read({{SETTINGS_PROFILE_PATHS}})"
+            "Read({{SETTINGS_PROFILE_PATHS.claude-restricted}})"
           ]
         }
       }

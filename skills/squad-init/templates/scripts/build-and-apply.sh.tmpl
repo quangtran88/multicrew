@@ -13,39 +13,29 @@ DRY=0; [[ "${1:-}" == "--dry" ]] && DRY=1
 # truncates a prompt above it). Probed at P0, carried in holes.json. Fail-closed: without it we cannot
 # run the hard-cap assert, so we refuse rather than apply blind.
 HOLES_JSON="${MCA_HOLES_JSON:-manifest/holes.json}"
-PLATFORM_LIMIT="$(jq -r '(.holes.PLATFORM_INSTRUCTION_LIMIT.value // .holes.PLATFORM_INSTRUCTION_LIMIT // .PLATFORM_INSTRUCTION_LIMIT // empty)' "$HOLES_JSON" 2>/dev/null || true)"
+PLATFORM_LIMIT="$(jq -r '(.extra_probes.PLATFORM_INSTRUCTION_LIMIT.value // .holes.PLATFORM_INSTRUCTION_LIMIT.value // .holes.PLATFORM_INSTRUCTION_LIMIT // .PLATFORM_INSTRUCTION_LIMIT // empty)' "$HOLES_JSON" 2>/dev/null || true)"
 if ! [[ "$PLATFORM_LIMIT" =~ ^[0-9]+$ ]]; then
-  echo "✗ platform instruction-size limit unreadable from $HOLES_JSON (PLATFORM_INSTRUCTION_LIMIT) — refusing to apply without the hard-cap assert" >&2
+  echo "✗ platform instruction-size limit unreadable from $HOLES_JSON (extra_probes.PLATFORM_INSTRUCTION_LIMIT — probe checklist extra probe A) — refusing to apply without the hard-cap assert" >&2
   exit 1
 fi
 
-# Measured byte caps, keyed by seat: each is the seat's assembled size at init + ~5% headroom, MEASURED
-# (never a hand-tuned literal table). An unrecognized seat FAILS CLOSED — never a silent default cap
-# (a roster/prefix change must re-measure, not fall through).
-declare -A SEAT_CAP=(
-# {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
-  ["{{seat.name}}"]="{{seat.cap}}"
-# {{/FOREACH}}
-)
-cap_for(){
-  local c="${SEAT_CAP[$1]:-}"
-  if [[ -z "$c" ]]; then
-    echo "✗ no measured byte cap for seat '$1' — fail-closed (re-measure the manifest; never default a cap)" >&2
-    return 1
-  fi
-  printf '%s' "$c"
-}
-
-# seat rows: uuid|name|card|prepend-tier (0=card only, 1=constitution+card, 2=constitution+_reviewer-common+card)
+# seat rows: uuid|name|card|prepend-tier|cap
+#   prepend: 0=card only, 1=constitution+card, 2=constitution+_reviewer-common+card
+#   cap: the seat's MEASURED byte cap (assembled size at init + ~5% headroom — never a hand-tuned
+#   literal). A missing/non-numeric cap FAILS CLOSED — never a silent default (a roster/prefix change
+#   must re-measure, not fall through). One table, bash-3.2-safe (no associative array — stock macOS).
 seats=(
 # {{FOREACH:seat}} — generated from seat-manifest.yaml at P4 — do not hand-edit
-  "{{seat.uuid}}|{{seat.name}}|{{seat.card}}|{{seat.prepend-tier}}"
+  "{{seat.uuid}}|{{seat.name}}|{{seat.card}}|{{seat.prepend-tier}}|{{seat.cap}}"
 # {{/FOREACH}}
 )
 
 for row in "${seats[@]}"; do
-  IFS='|' read -r id name card prepend <<<"$row"
-  cap="$(cap_for "$name")" || exit 1
+  IFS='|' read -r id name card prepend cap <<<"$row"
+  if ! [[ "$cap" =~ ^[0-9]+$ ]]; then
+    echo "✗ no measured byte cap for seat '$name' — fail-closed (re-measure the manifest; never default a cap)" >&2
+    exit 1
+  fi
   apply_seat "$DRY" "$id" "$name" "$prepend" "$card" "$cap" "$PLATFORM_LIMIT"
 done
 

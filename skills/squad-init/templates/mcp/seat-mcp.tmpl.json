@@ -7,7 +7,7 @@
     "$from-profile": "at P4, resolve to the concrete `mcpServers` object produced by applying the named profile (see `profiles`) to the catalog.",
     "$apply": "ordered list of pattern names (see `patterns`) merged onto the profile base, in order.",
     "$search-query-tool-only": "the search-egress server's query tool name, resolved from the catalog. Every other tool on that server — notably its arbitrary-URL fetch tool — is dropped.",
-    "$profile-vocab": "valid `seat.mcp-profile` values a seat row may carry: broad | broad-cold | broad-hardened | ambient."
+    "$profile-vocab": "valid `seat.mcp-profile` values a seat row may carry (MUST stay in lockstep with seat-manifest.tmpl.yaml mcp_profiles): broad | broad-playwright | cold-review-masked | hardened-restricted | memory-only | ambient | none."
   },
 
   "catalog": {
@@ -26,12 +26,12 @@
     "memory-tool-mask": {
       "target": "catalog.memory-backend",
       "merge": { "enabled": false },
-      "$doc": "COLD-review hardening. A per-agent mcp_config merges OVER the ambient one, so an {\"enabled\": false} stub on the memory server suppresses it for this seat — makes the constitution's COLD-review exemption literally true (the seat carries no recalled prior conclusion into a fresh review). audit-drift asserts the mask is present when a seat's mcp-asserts include `memory-masked`."
+      "$doc": "COLD-review hardening. A per-agent mcp_config merges OVER the ambient one, so an {\"enabled\": false} stub on the memory server suppresses it for this seat — makes the constitution's COLD-review exemption literally true (the seat carries no recalled prior conclusion into a fresh review). audit-drift asserts the mask is present when a seat's mcp-asserts include `agentmemory-mask`."
     },
     "search-egress-restriction": {
       "target": "catalog.search-egress",
       "merge": { "enabledTools": "$search-query-tool-only" },
-      "$doc": "egress hardening for a code-probing seat. The stdio server's enabledTools arg is the REAL gate — a `--settings` deny profile cannot gate an in-process outbound GET. Fail-loud asserted right after authoring: a sparse catalog would emit a null/absent server and pass silently, so assert the server is a non-null object AND the fetch tool is gone before applying. audit-drift asserts the restriction when a seat's mcp-asserts include `search-egress-restricted`."
+      "$doc": "egress hardening for a code-probing seat. The stdio server's enabledTools arg is the REAL gate — a `--settings` deny profile cannot gate an in-process outbound GET. Fail-loud asserted right after authoring: a sparse catalog would emit a null/absent server and pass silently, so assert the server is a non-null object AND the fetch tool is gone before applying. audit-drift asserts the restriction when a seat's mcp-asserts include `exa-egress-restriction`."
     }
   },
 
@@ -41,15 +41,30 @@
       "$apply": [],
       "$doc": "every server the account exposes, memory active. Default for memory-mounted pipeline + curator seats. Research and documentation servers stay here by default (no dedicated research seat). Ship broad — prune by measured usage later."
     },
-    "broad-cold": {
+    "broad-playwright": {
+      "base": "{{MCP_SERVER_CATALOG}}",
+      "$apply": [],
+      "$doc": "broad + the browser-automation server — authored only when {{UI_SURFACE}} is present (the QA seat); when the scan found no UI surface, resolve this profile exactly as `broad`."
+    },
+    "cold-review-masked": {
       "base": "{{MCP_SERVER_CATALOG}}",
       "$apply": ["memory-tool-mask"],
-      "$doc": "broad catalog with memory suppressed — COLD-review posture (a binding review lens reviews with no recalled priors). audit-asserts: memory-masked."
+      "$doc": "broad catalog with memory suppressed — COLD-review posture (a binding review lens reviews with no recalled priors). audit-asserts: agentmemory-mask."
     },
-    "broad-hardened": {
+    "hardened-restricted": {
       "base": "{{MCP_SERVER_CATALOG}}",
       "$apply": ["search-egress-restriction"],
-      "$doc": "broad catalog with the search server's arbitrary-URL fetch tool stripped — for a seat that runs member-authorized code probes. Pairs with the hardened `--settings` deny profile (see deny-profiles.tmpl.json). audit-asserts: search-egress-restricted."
+      "$doc": "broad catalog with the search server's arbitrary-URL fetch tool stripped — for a seat that runs member-authorized code probes. Pairs with the hardened `--settings` deny profile (see deny-profiles.tmpl.json). audit-asserts: exa-egress-restriction."
+    },
+    "memory-only": {
+      "base": "catalog.memory-backend",
+      "$apply": [],
+      "$doc": "the memory backend alone — the curator seat (Mentor) runs lean: recall/save plus its bound skills, nothing else."
+    },
+    "none": {
+      "base": {},
+      "$apply": [],
+      "$doc": "no MCP servers and NO per-agent file authored (seat.mcp-file is empty — Monitor, Helper)."
     },
     "ambient": {
       "base": {},

@@ -32,7 +32,7 @@ Note on holes: the **44 canonical holes** are the only per-project surface. **De
 ## P0 — Preflight (probe the live account/runtime)
 
 **Do:**
-1. Run `reference/engine-probe-checklist.md` against the target account. Fill the 11 **probe** holes into `manifest/holes.tmpl.json` → `holes.json`: `OWNER_MENTION`, `SEAT_MODELS`, `RUNTIME_UUIDS`, `EFFORT_LEVER`, `MCP_SERVER_CATALOG`, `MEMORY_BACKEND_URL_API`, `RUNTIME_SKILL_AUTOLOAD`, `RUNTIME_MCP_MOUNT`, `ENGINE_WAKE_SEMANTICS`, `ENGINE_CONCURRENCY_AND_TIMING`, `RUNTIME_QUIRKS`.
+1. Run `reference/engine-probe-checklist.md` against the target account. Fill the 11 **probe** holes into `manifest/holes.tmpl.json` → `holes.json`: `OWNER_MENTION`, `SEAT_MODELS`, `RUNTIME_UUIDS`, `EFFORT_LEVER`, `MCP_SERVER_CATALOG`, `MEMORY_BACKEND_URL_API`, `RUNTIME_SKILL_AUTOLOAD`, `RUNTIME_MCP_MOUNT`, `ENGINE_WAKE_SEMANTICS`, `ENGINE_CONCURRENCY_AND_TIMING`, `RUNTIME_QUIRKS`. Also run the checklist's **extra P0 probes** (deliberately not among the 44): probe A's platform instruction-size limit is recorded as `extra_probes.PLATFORM_INSTRUCTION_LIMIT` in `holes.json` — `build-and-apply.sh` hard-fails without it.
 2. Enumerate the account model catalog and resolve candidate models per capability class using `reference/capability-classes.md` (judgment-class, 1M-coder-class, reviewer-class, validator-class, cheap-watchdog-class).
 3. Ship the MCP catalog **broad-then-prune** — record what the account offers, not a pre-pruned subset. The prune sweep happens later (STANDARD+), keyed on measured usage.
 4. Stamp every probe hole's value with a **RE-VALIDATE PER ENGINE VERSION** banner and the probe date.
@@ -80,10 +80,10 @@ Do NOT ask about: veto assignment, workspace language, Monitor thresholds, byte-
 
 **Do:**
 1. **Derive `seat-manifest.yaml` FROM `holes.json`** (R8 write direction — holes.json is canonical; the manifest is downstream). Do not hand-maintain the manifest as a second source of truth.
-2. Substitute holes into every template (`constitution.md.tmpl`, `squad.md.tmpl`, `roles/*.md.tmpl`, `scripts/*.tmpl`, `mcp/*.json`).
-3. **Expand `{{FOREACH:seat}} … {{/FOREACH}}` regions** from `seat-manifest.yaml` — the per-seat rows in the 3 script tables and the constitution MENTION DIRECTORY. Each expanded region is marked "generated from seat-manifest.yaml at P4 — do not hand-edit".
+2. Substitute holes into every template (`constitution.md.tmpl`, `squad.md.tmpl`, `roles/*.md.tmpl`, `scripts/*.tmpl`, `mcp/*.json`) **and the bundled skill payload** (`skills/*/SKILL.md` — the manifest's `consumers` lists name them; an installed skill must carry zero unfilled tokens).
+3. **Expand `{{FOREACH:seat}} … {{/FOREACH}}` regions** from `seat-manifest.yaml` — the per-seat rows in the 3 script tables, the constitution MENTION DIRECTORY, and the `seat_configs` list in `mcp/seat-mcp.tmpl.json`. Each expanded region is marked "generated from seat-manifest.yaml at P4 — do not hand-edit".
 4. **Compute derived tokens:** seat names (`{{SEAT_PREFIX}}-<RoleSuffix>`), `{{LEAD_MENTION}}`, `{{VALIDATOR_FANOUT}}` (strictly below the pool from `ENGINE_CONCURRENCY_AND_TIMING` — R6), `{{AP_DESC}}` (templated on `{{CONTROL_ISSUE_KEY}}` — R4).
-5. **Strip breadcrumbs:** remove the maintainer provenance/legend HTML comment blocks (the `<!-- multicrew · … -->` header atop each card template and the `$`-prefixed documentation blocks in the MCP JSON) from the emitted output. They are package documentation, not seat instructions — and their `{{…}}` legend text would false-trip linter (1) below.
+5. **Strip breadcrumbs:** remove the maintainer provenance/legend HTML comment blocks (the `<!-- multicrew · … -->` headers atop the reviewer card templates — the only cards that carry one — and the `$`-prefixed documentation blocks in the MCP JSON) from the emitted output. They are package documentation, not seat instructions — and their `{{…}}` legend text would false-trip linter (1) below.
 6. **Leave every EARNED fence EMPTY** — fence-marked `<!-- EARNED:name -->` / `<!-- /EARNED -->` (shell files use `# EARNED:name` / `# /EARNED`). Never leave donor project content inside a fence.
 7. **Author the MCP outputs** (`mcp/seat-mcp.tmpl.json`, `mcp/deny-profiles.tmpl.json`) from the P0 catalog. This is the **ONE sanctioned generation surface** (R9) — constrained to P0-catalog lookups + the baked patterns (agentmemory mask, exa egress-restriction), and explicitly in P4.5's review scope. Do NOT derive-from-live here; a fresh squad has nothing to derive from.
 
@@ -95,11 +95,17 @@ Do NOT ask about: veto assignment, workspace language, Monitor thresholds, byte-
 ```bash
 #!/usr/bin/env bash
 # P4 no-smuggled-specificity linter — run against the EMITTED config only.
-# Scope: filled constitution/squad/role cards, the 3 manifest-generated scripts,
-# route.sh/post-verdict.sh, seat-mcp.json + deny profiles, emitted/PIPELINE.md + RUNBOOK.
+# Scope: filled constitution/squad/role cards, the FILLED skills/*/SKILL.md payload, the 3
+# manifest-generated scripts, route.sh/post-verdict.sh, seat-mcp.json + deny profiles,
+# emitted/PIPELINE.md + RUNBOOK.
 # NOT scoped: manifest/holes.json (its donor_example fields are documentation) or reference/.
+# bash-3.2-safe (stock macOS): no mapfile / associative arrays. Requires jq.
 set -uo pipefail
-EMITTED_DIR="${1:?usage: lint <emitted-config-dir>}"
+EMITTED_DIR="${1:?usage: lint <emitted-config-dir> [<holes.tmpl.json>]}"
+MANIFEST="${2:-manifest/holes.tmpl.json}"
+# Fail LOUD if the manifest is unreadable — otherwise checks (2)/(3b) silently degrade to no-ops
+# and the lint false-greens. Run from skills/squad-init/, or pass the manifest path explicitly.
+[[ -r "$MANIFEST" ]] || { echo "BLOCK: cannot read $MANIFEST — run from the package root or pass its path"; exit 1; }
 fail=0; note(){ echo "  ✗ $1"; fail=1; }
 
 # 1. No unfilled holes survived substitution (incl. FOREACH tokens). The second grep
@@ -114,10 +120,10 @@ grep -rnE '\{\{[/A-Za-z_][A-Za-z0-9_.:-]*\}\}' "$EMITTED_DIR" | grep -vE '\{\{\{
 #    home paths). This keeps the installer itself free of donor specificity. The manifest
 #    records prefix-shaped examples WITH their trailing separator (the seat prefix and
 #    issue-key prefix carry their "-") so these fixed-string greps never match common words.
-mapfile -t DONOR < <(jq -r '.. | .donor_example? // empty | select(type=="string") | select(length>1)' manifest/holes.tmpl.json | sort -u)
-for lit in "${DONOR[@]}"; do
+while IFS= read -r lit; do
+  [[ -n "$lit" ]] || continue
   grep -rnF -- "$lit" "$EMITTED_DIR" && note "donor literal leaked: '$lit'"
-done
+done < <(jq -r '.. | .donor_example? // empty | select(type=="string") | select(length>1)' "$MANIFEST" | sort -u)
 
 # 3. Machine-coupling shapes that are dangerous regardless of donor identity.
 grep -rnE '/Users/[A-Za-z]|/home/[A-Za-z]' "$EMITTED_DIR" && note "home-dir path in emitted output"
@@ -126,13 +132,13 @@ grep -rnE '(localhost|127\.0\.0\.1):[0-9]{2,5}' "$EMITTED_DIR" && note "localhos
 #      whole fixed string, so a lone "staging"/"main" leaking from a template that should
 #      have been holed slips right past it. Derive the donor branch tokens from the branch
 #      holes themselves (keeps this linter free of a hardcoded donor blocklist) and word-match.
-mapfile -t BRANCH_TOK < <(
-  { jq -r '.holes.TARGET_BRANCH.donor_example, .holes.BASE_BRANCH.donor_example' manifest/holes.tmpl.json | sed 's/ (.*//'
-    jq -r '.holes.PROTECTED_BRANCHES.donor_example' manifest/holes.tmpl.json | sed -n 's/.*Donor: //p' | tr -d '.'; } \
-  | tr ',/ ' '\n' | grep -E '^[A-Za-z][A-Za-z0-9._-]+$' | grep -vixE 'origin|refs|heads' | sort -u)
-for b in "${BRANCH_TOK[@]}"; do
+while IFS= read -r b; do
+  [[ -n "$b" ]] || continue
   grep -rnwF -- "$b" "$EMITTED_DIR" && note "bare donor branch token leaked: '$b'"
-done
+done < <(
+  { jq -r '.holes.TARGET_BRANCH.donor_example, .holes.BASE_BRANCH.donor_example' "$MANIFEST" | sed 's/ (.*//'
+    jq -r '.holes.PROTECTED_BRANCHES.donor_example' "$MANIFEST" | sed -n 's/.*Donor: //p' | tr -d '.'; } \
+  | tr ',/ ' '\n' | grep -E '^[A-Za-z][A-Za-z0-9._-]+$' | grep -vixE 'origin|refs|heads' | sort -u)
 
 ((fail)) && { echo "BLOCK: P4 found smuggled specificity — fix before P4.5."; exit 1; }
 echo "✓ P4: no smuggled specificity, no unfilled holes, caps within budget"
@@ -152,7 +158,7 @@ Order matters — several steps are chicken-and-egg on a fresh squad.
 
 **Do, in order:**
 1. **Author MCP FIRST.** Derive-from-live inverts on a fresh squad (there is no live config to mutate), so the seat MCP configs and deny profiles are authored from the P0 catalog (done at P4) and applied via `--mcp-config-file`. The fail-loud jq asserts (all-servers-non-null; exa restricted to `web_search_exa`) validate the AUTHORED file — that assert is the crown jewel, kept verbatim.
-2. **Mint account objects:** squad, project board, control issue, watchdog autopilot, skills. Capture `SQUAD_UUID`, `PROJECT_BOARD_UUID`, `CONTROL_ISSUE_KEY`, `WATCHDOG_AUTOPILOT_UUID`, `SKILL_UUIDS`, `SETTINGS_PROFILE_PATHS` into `holes.json`.
+2. **Mint account objects:** squad, project board, control issue, watchdog autopilot, skills (bodies = the P4-filled `skills/*/SKILL.md`, zero unfilled tokens). Capture `SQUAD_UUID`, `PROJECT_BOARD_UUID`, `CONTROL_ISSUE_KEY`, `WATCHDOG_AUTOPILOT_UUID`, `SKILL_UUIDS`, `SETTINGS_PROFILE_PATHS` into `holes.json`.
 3. **Create the seats.** Capture `SEAT_UUIDS`.
 4. **UUID BACKFILL — mandatory two-pass.** The MENTION DIRECTORY, the reviewer Handoff lines, and the script seat tables all reference UUIDs that do not exist until the seats do. Pass 1 creates; pass 2 backfills the captured UUIDs into the directory + Handoff lines + script tables. This is what breaks the UUID↔mention-directory cycle.
 5. **Regenerate the 3 scripts from the manifest** (build/apply, roster, drift) now that UUIDs exist.
@@ -169,7 +175,7 @@ Order matters — several steps are chicken-and-egg on a fresh squad.
 1. **Planted-bug review shakedown:** feed a deliberately broken diff and confirm the reviewer bench catches it (a false-green means the fill is wrong, not that the squad is ready).
 2. **One trivial end-to-end intake:** run a single small, real-shaped request through readiness → build → review → (QA) → delivery.
 3. **Emit `emitted/PIPELINE.md`** from the LIVE config via `drift-lib` — never hand-written, no hand-maintained byte counts.
-4. **Emit the RUNBOOK** from `emitted/RUNBOOK.md.tmpl` with tier-conditional expectations (the learning loop is FULL-tier-only; the runbook must not promise it generically at MIN/STANDARD).
+4. **Emit the RUNBOOK** from `emitted/RUNBOOK.md.tmpl` with tier-conditional expectations (the learning loop is FULL-tier-only; the runbook must not promise it generically at MIN/STANDARD). Fill its two **P6-fill tokens** — `{{RUNBOOK_EXPECTATIONS}}` (the owner's verbatim Q7 answer) and `{{P7_CADENCE_NOTE}}` — per their inline comments; they are deliberately NOT among the 44 holes.
 
 **STOP condition:** do **NOT** arm the watchdog for real traffic or declare the squad live until the planted bug is caught **AND** the trivial intake completes. Both gates, not either.
 

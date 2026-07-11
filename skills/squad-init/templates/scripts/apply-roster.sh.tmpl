@@ -24,6 +24,7 @@ PS_ID="{{seat.uuid}}"
 PS_NAME="{{seat.name}}"
 PS_RUNTIME_UUID="{{seat.runtime-uuid}}"
 PS_MODEL="{{seat.model-class}}"
+[[ "$PS_MODEL" == "inherit" ]] && PS_MODEL=""   # manifest sentinel: no model pin — inherit the runtime default
 PS_EFFORT="{{seat.effort-flag}}"        # claude: `--thinking-level {{seat.effort}}`; opencode/antigravity: "" (lever rides custom-args / the model token)
 PS_CUSTOM_ARGS='{{seat.custom-args}}'   # a JSON array; the hardened --settings deny profile is injected here (pinned in BOTH branches — F20)
 PS_MAX_CONC="{{seat.max-conc}}"
